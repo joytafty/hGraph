@@ -35,6 +35,7 @@ var type = (function( ) {
 var isArr = function( thing ) { return type(thing) === "array"; };
 var isObj = function( thing ) { return type(thing) === "object"; };
 var isStr = function( thing ) { return type(thing) === "string"; };
+var isNum = function( thing ) { return type(thing) === "number"; };
 var isFn = function( thing ) { return type(thing) === "function"; };
 var isDef = function( thing ){ return type(thing) !== undefined; };
 var isUndef = function( thing ) { return !isDef( thing ); };

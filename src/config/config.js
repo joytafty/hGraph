@@ -1,0 +1,2 @@
+var CONFIG = { };
+CONFIG['HGRAPH_VERSION'] = '0.01';

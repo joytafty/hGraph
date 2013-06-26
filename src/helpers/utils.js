@@ -4,12 +4,13 @@ import "shortcuts"
 // returns a new unique identifier string to be used in hashes
 // @returns {string} a unique identifier that is useable on the client-side
 var createUID = (function( ) {
-    var uid = 0;
+    var uid = 0,
+        bit = function( ) { return Math.floor( Math.random( ) * 10e4 ).toString(32).slice(0,3); };
+        
     return (function( ) {
-        return "uid-" + (++uid);
+        return "uid-" + bit( ) + "-" + bit( ) + "-" + (++uid);
     });
 })( );
-
 
 // inject
 // creates a function that calls the function being passed in as the first 

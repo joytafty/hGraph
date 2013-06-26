@@ -1,114 +1,83 @@
-import "component"
-import "transform"
-import "pointtext"
+import "component";
 
-// hGraph.Graph.Point
-// points 
+hGraph.Graph.Point = (function( ) {
 
-// PointFactory
-function PointFactory( proto ) {
+var // local hash just like in graph
+    localsHash = { };
 
-    proto.Update = function( ) {    
-        var graphTransform = this.locals.GetComponent('transform'),
-            graphWeb = this.locals.GetComponent('web'),
-            scoreScale = this.locals.scoreScale,
-            dist;
+function Point( proto ) {
         
-        // get the distance the point is away
-        dist = scoreScale( this.score );
+    proto.Update = function( ) { 
+        var local = localsHash[this.uid],
+            object = local['object'],
+            subManager = local['subManager'];
         
-        // update the transform of this point
-        this.transform.position.x = graphTransform.position.x + 
-                                    Math.cos( toRad( this.transform.rotation + graphTransform.rotation ) ) *
-                                    dist;
-        this.transform.position.y = graphTransform.position.y + 
-                                    Math.sin( toRad( this.transform.rotation + graphTransform.rotation ) ) *
-                                    dist;
-        
-        // the point color will be updated
-        this.pointColor = ( this.score < 66 && this.score > 33 ) 
-                                ? DEFAULTS['HGRAPH_POINT_COLOR_HEALTHY']
-                                : DEFAULTS['HGRAPH_POINT_COLOR_UNHEALTHY'];
-        
-        // add this point to the graph's web path if it needs to be drawn
-        if( this.manager.drawFlag === true )
-            graphWeb.AddPoint( this.transform );
-        
-        // update any children this point may have
-        this.subManager.Update( );   
-        // udpate the point's text
-        this.text.Update( this.transform.rotation + graphTransform.rotation );
+        // make sure all sub points are updated as well
+        subManager.Update( );
     };
     
-    proto.Draw = function( ) {         
-        var device = this.locals['device'];
-        // set opacity based on point manager
-        device.globalAlpha = this.manager.opacity;
-        // draw the circle
-        device.beginPath( );
-        device.arc( this.transform.position.x, this.transform.position.y, this.radius, 0, Math.PI * 20 );
-        device.fillStyle = this.pointColor;
-        device.fill( );
-        // draw the text for this point
-        this.text.Draw( );
-        // draw any sub points
-        if( this.subManager.points.length > 0 )
-        	this.subManager.Draw( );
-    };
-    
-    proto.CheckBoundingBox = function( mx, my ) {
-        var graphTransform = this.locals.GetComponent('transform'),
-            distX = mx - this.transform.position.x,
-            distY = my - this.transform.position.y,
-            distA = ( distX * distX ) + ( distY * distY ),
-            ownClick = distA < ( this.radius * this.radius ),
-            childClick = this.subManager.CheckClick( mx, my );
+    proto.Initialize = function( scene ) {
+        var local = localsHash[this.uid],
+            object = local['object'],
+            subManager = local['subManager'],
+            manager = local['manager'],
+            index = local['index'],
+            // get parent degree info
+            degreeInfo = manager.GetDegreeRange( ),
+            startTheta = degreeInfo.x,
+            thetaInc = degreeInfo.z;
             
-        return ownClick || childClick;
-    };
+        var subStart = startTheta + (thetaInc * index),
+            subEnd = subStart + thetaInc;
+            
+        subManager.SetDegreeRange( subStart, subEnd );
+        
+        var xpos = Math.cos( toRad( startTheta + (thetaInc * index) ) ) * 100,
+            ypos = Math.sin( toRad( startTheta + (thetaInc * index) ) ) * 100;
+            
+        object.position.x = xpos;
+        object.position.y = ypos;
     
-    proto.PostInitialize = function( ) {
-        var manager = this.manager,
-            dependencies = this.dependencies,
-            subData, subPoint;
-        
-        // loop through the dependencies data and addd points into the sub manager
-        while( subData = dependencies.pop( ) )
-            subPoint = this.subManager.AddPoint( subData );
-        
-        // calculate the sub-manager's rotational degree information
-        var start = manager.pointIncrement * this.index,
-            end = start + manager.pointIncrement,
-            subSpace = end - start,
-            subInc = subSpace / ( this.subManager.points.length + 2 );
-        // save the degree information
-        this.subManager.minDegree = start + subInc;
-        this.subManager.maxDegree = end - subInc;
-        // initialize the sub manager, which initializes sub points
-        this.subManager.Initialize( this.locals );
-        this.text.Initialize( this.locals );
-        // update this point's rotation value
-        this.transform.rotation = ( this.manager.pointIncrement * this.index ) + this.manager.minDegree;
+        // add this object into the scene
+        scene.add( local['object'] );  
+        // make sure all sub points get initialized as well
+        subManager.Initialize( scene );
     };
-          
+
 };
 
-PointFactory['constructor'] = function( config ) {  
-    if( !config || !isObj( config ) )
-        throw hGraph.Error('not enough information provided to create point');
-    this.radius = DEFAULTS['HGRAPH_POINT_RADIUS'];
-    // grab values from the configuration
-    this.score = toInt( config['score'] );
-    // every point has a tranform to use
-    this.transform = new hGraph.Graph.Transform( );
-    // create the text from the configuration
-    this.text = new hGraph.Graph.PointText( config );
-    // create a sub manager in case of dependent points
-    this.subManager = new hGraph.Graph.PointManager( true );
-    // save an array of the dependent points
-    this.dependencies = config.dependencies || [ ];    
-    this.pointColor = "#333";
+Point['constructor'] = function( parameters, manager, index ) {
+    
+    this.uid = createUID( );
+    
+    var local = { },
+        subManager
+        color = manager.subFlag ? 0x333333 : 0x333333,
+        opacity = manager.subFlag ? 0.0 : 1.0;
+        
+    local['index'] = index;
+    // geometric properties
+    local['geometry'] = new THREE.CircleGeometry( 15, 3 );
+    local['material'] = new THREE.MeshBasicMaterial({ color : color, opacity : opacity });
+    local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
+    local['manager'] = manager;
+    
+    // point data properties
+    this.name = parameters.name;
+    this.value = parameters.value;
+    this.score = parameters.score;
+    this.healthyRange = parameters.healthyRange;
+   
+    local['dependencies'] = parameters.dependencies || [ ];
+    
+    // create a sub manager with the points that this point depends on
+    subManager = new hGraph.Graph.PointManager( local['dependencies'], true, manager.GetDegreeRange( ) );
+    
+    local['subManager'] = subManager;
+    
+    localsHash[this.uid] = local;
 };
 
-// create the constructor from the component factory
-hGraph.Graph.Point = hGraph.Graph.ComponentFacory( PointFactory );
+return ComponentFactory( Point );
+
+})( );

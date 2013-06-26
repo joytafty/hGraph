@@ -22,19 +22,19 @@
 var // hGraph namespace definition
     hGraph = { },
     
-    // Sizzle and d3 namespaces defined in vendor
-    Sizzle = { },
+    // THREE and d3 namespaces defined in vendor
+    THREE = THREE || { REVISION: '58' },
     d3 = { },
     
-    // private (h) variables
-    hRootElement = false,
-    hGraphInstances = { },
-    hResizeCallbacks = [ ];
+    // script-wide accessable private variables
+    __RootElement = false,
+    __GraphInstances = { },
+    __ResizeCallbacks = [ ];
 
 import "vendor/"
-import "defaults/"
-import "error/"
+import "config/"
 import "helpers/"
+import "error/"
 import "data/"
 import "graph/"
 
@@ -42,7 +42,7 @@ import "graph/"
 // loops through the resize callbacks firing them with the new width and
 // height of the window
 function hWindowResize( ) { 
-    forEach( hResizeCallbacks, function( fn )  {
+    forEach( __ResizeCallbacks, function( fn )  {
         return isFn( fn ) && fn( ); 
     });
 };
@@ -54,7 +54,7 @@ function hWindowResize( ) {
 // creates the hgraph inside the container parameter
 function hCreateGraph( container ){
     var uid = createUID( );
-    hGraphInstances[uid] = new hGraph.Graph({ uid : uid, container : container });
+    __GraphInstances[uid] = new hGraph.Graph({ uid : uid, container : container });
 };
 
 // hGraphInit
@@ -66,8 +66,8 @@ function hGraphInit( ) {
         hCreateGraph( this );
     });
     
-    for( var uid in hGraphInstances )
-        hGraphInstances[uid].Initialize( );
+    for( var uid in __GraphInstances )
+        __GraphInstances[uid].Initialize( );
 };
 
 // hGraphBootStrap
@@ -79,14 +79,15 @@ function hGraphBootStrap( ) {
     d3.select( DEFAULTS['HGRAPH_APP_BOOTSTRAPS'].join(',') ).each(function( ){
         matches.push( this );
     });
+    
     // do not proceed if more than one 
     if( matches.length > 1 )
         throw new hGraph.Error('Too many root elements found on the page');
         
-    hRootElement = matches[0];
+    __RootElement = matches[0];
     
     // if the 'hgraph-app' attribute was found, we can initialize
-    if( hRootElement )
+    if( __RootElement )
         return hGraphInit( );
 };
 

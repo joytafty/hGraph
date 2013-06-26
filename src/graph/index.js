@@ -1,7 +1,6 @@
 import "graph"
-import "transform"
-import "pointmanager"
 import "ring"
+import "pointmanager"
 import "point"
 import "pointtext"
 import "web"

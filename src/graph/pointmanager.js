@@ -1,78 +1,90 @@
-import "component"
+import "component";
 
-// hGraph.Graph.PointManager
+hGraph.Graph.PointManager = (function( ) {
 
-// PointManagerFactory
-function PointManagerFactory( proto ) {
-    
-    function CalculatePointIncrement( ) {
-        var amt = this.points.length,
-            inc = ( this.maxDegree - this.minDegree ) / amt;
-        return inc;
-    };
-    
-    proto.CheckClick = function( mx, my ) {
-        for( var i = 0; i < this.points.length; i++ )
-            if( this.points[i].CheckBoundingBox( mx, my ) ) return true;
-    };
-    
+var // local hash just like in graph
+    localsHash = { };
+
+function PointManager( proto ) {
+        
     proto.Update = function( ) { 
-        var transform = this.locals.GetComponent('transform');
-        this.opacity = ( this.subFlag ) ? abs( 0.5 - transform.scale ) : 1.0;
-        this.drawFlag = this.opacity > 0 ? true : false;
-        // loop through the points, updating them
-        for( var i = 0; i < this.points.length; i++ )
-            this.points[i].Update( );
+        var local = localsHash[ this.uid ],
+            points = local['points'];
+        
+        for( var i = 0; i < points.length; i++ )
+            points[i].Update( );
     };
     
-    proto.Draw = function( ) {
-        // loop through the points, drawing them
-        for( var i = 0; i < this.points.length; i++ )
-            this.points[i].Draw( );
+    proto.Initialize = function( scene ) {
+        var local = localsHash[ this.uid ],
+            points = local['points'];
+        
+        for( var i = 0; i < points.length; i++ )
+            points[i].Initialize( scene );
     };
-        
-    proto.AddPoint = function( data ) { 
-        // create the point
-        var point = new hGraph.Graph.Point( data );
-        
-        // make sure the point knows what his index is
-        point.index = this.points.length;
-        
-        // expose this manager to the point so it will be able to calc it's degree
-        point.manager = this;
-        
-        // if this is a sub-point list, make this dot smaller
-        if( this.subFlag )
-            point.radius = DEFAULTS['HGRAPH_SUBPOINT_RADIUS'];
+    
+    proto.SetDegreeRange = function( min, max ) {
+        var local = localsHash[ this.uid ],
+            points = local['points'],
+            degreeRange = local['degreeRange'],
+            absMin = min,
+            absMax = max,
+            absSpace = absMax - absMin,
+            absInc = absSpace / ( points.length + 1 );
             
-        // add the point to the manager's 'points' array
-        this.points.push( point );
-        
-        // return the point for local storage
-        return point;
+        degreeRange.x = absMin + ( absInc );
+        degreeRange.y = absMax - ( absInc );
+        degreeRange.z = absInc;
     };
     
-    proto.PostInitialize = function( ) { 
-        // update the manager's 'pointIncrement' property
-        this.pointIncrement = CalculatePointIncrement.call( this );
-        
-        // initialize the points with the local variable hash
-        for( var i = 0; i < this.points.length; i++ )
-        	this.points[i].Initialize( this.locals );  
+    
+    proto.GetDegreeRange = function( ) {
+        var local = localsHash[ this.uid ],
+            degreeRange = local['degreeRange'];
+        return degreeRange;      
+    };
+    
+    proto.GetPointCount = function( ) {
+        var local = localsHash[ this.uid ],
+            points = local['points'];
+            
+        return points.length;
     };
 
 };
 
-// PointManagerFactory (constructor)
-PointManagerFactory['constructor'] = function( subManagerFlag ) {
-    // initialize everything to 0
-    this.points = [ ];
-    this.pointIncrement = 0;
-    this.minDegree = 0;
-    this.maxDegree = 360;
-    this.subFlag = ( subManagerFlag === true ) ? true : false;
-    this.drawFlag = true;
+PointManager['constructor'] = function( data, subFlag, parentRange ) {
+    
+    this.uid = createUID( );
+    this.subFlag = subFlag;
+    
+    var local = { points : [ ] },
+        points = isArr( data ) ? data : [ ],
+        point, 
+        degreeRange = new THREE.Vector3( 0, 360, 10 ),
+        startDegree = parentRange.x,
+        endDegree = parentRange.y,
+        degreeSpace = endDegree - startDegree;
+    
+    // save all of the information in the degree range
+    degreeRange.x = parentRange.x;
+    degreeRange.y = parentRange.y;
+    degreeRange.z = degreeSpace / points.length;
+    
+    local['degreeRange'] = degreeRange;
+
+    // save the local hash into the private hash
+    localsHash[ this.uid ] = local;
+    
+    while( point = points.pop( ) ){ 
+        // create a new point
+        var p = new hGraph.Graph.Point( point, this, points.length );
+        // add the point into the local hash
+        local['points'].push( p );
+    }
+    
 };
 
-// create the constructor from the component factory
-hGraph.Graph.PointManager = hGraph.Graph.ComponentFacory( PointManagerFactory );
+return ComponentFactory( PointManager );
+
+})( );

@@ -1,38 +1,46 @@
-import "component"
+import "component";
 
-// hGraph.Graph.Ring
-// one of the drawable components of the hGraph.Graph class.
+hGraph.Graph.Ring = (function( ) {
 
-// RingFactory
-function RingFactory( proto ) {
+var // local hash just like in graph
+    localsHash = { };
+
+function Ring( proto ) {
+        
+    proto.Update = function( mouse ) { 
+        var local = localsHash[ this.uid ],
+            object = local['object'];
+        
+        if( mouse.isDown ) { 
+            var add = Math.sin( mouse.downCount ) * 1;
+            object.scale.x = object.scale.y = object.scale.z = Math.abs( add );
+        }
+        
+    };
     
-    proto.Draw = function( ) {
-        // get the graph's transform and device components
-        var transform = this.locals.GetComponent('transform'),
-            device = this.locals.device,
-            scoreScale = this.locals.scoreScale;
-        
-        device.globalAlpha = 1.0;
-        // draw the outer circle first
-        device.beginPath( );
-        device.arc( transform.position.x, transform.position.y, scoreScale(66), 0, Math.PI * 20 );
-        device.fillStyle = DEFAULTS['HGRAPH_RING_FILL_COLOR'];
-        device.fill( );
-        
-        // draw the outer circle first
-        device.beginPath( );
-        device.arc( transform.position.x, transform.position.y, scoreScale(33), 0, Math.PI * 20 );
-        device.fillStyle = "#fff";
-        device.fill( );
-        
+    proto.Initialize = function( scene ) {
+        var local = localsHash[ this.uid ],
+            object = local['object'];
+        // add this object into the scene
+        scene.add( object );  
     };
 
 };
 
-RingFactory['constructor'] = function( ) {
-    this.innerRadius = DEFAULTS['HGRAPH_INNER_RADIUS'];  
-    this.outerRadius = DEFAULTS['HGRAPH_OUTER_RADIUS'];
+Ring['constructor'] = function( ) {
+
+    this.uid = createUID( );
+    var local = { };
+        
+    local['geometry'] = new THREE.RingGeometry( 150, 200, 3 );
+    local['material'] = new THREE.MeshBasicMaterial({ color : 0x97be8c });
+    local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
+    
+    // save the local variables into the hash
+    localsHash[ this.uid ] = local;
+    
 };
 
-// create the Ring constructor from the component factory
-hGraph.Graph.Ring = hGraph.Graph.ComponentFacory( RingFactory );
+return ComponentFactory( Ring );
+
+})( );

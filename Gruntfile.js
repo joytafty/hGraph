@@ -40,7 +40,7 @@ module.exports = function(grunt) {
         watch : {
             karma: {
                 files: ['src/**/*.js', 'tests/**/*.spec.js'],
-                tasks: ['clean','smash','publish:unmin','min','publish:min'] 
+                tasks: ['clean','smash','publish:unmin'] 
             }  
         },
         
@@ -58,8 +58,8 @@ module.exports = function(grunt) {
         
     });
     
-    grunt.registerTask('build', ['clean','smash','min','publish']);
-    grunt.registerTask('package', ['build','karma']);
+    grunt.registerTask('build', ['clean','smash','publish:unmin']);
+    grunt.registerTask('package', ['build','min','publish:min','karma']);
     grunt.registerTask('default', ['package']);
     
 };

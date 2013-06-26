@@ -3,293 +3,238 @@
 // with their canvas (as long as they have the 'hgraph-graph' trigger attribute)
 hGraph.Graph = (function( config ){ 
 
-function InternalResize( locals ) {
-    var transform = locals.GetComponent( 'transform' ); 
-    // update the width and height of the transform object
-    transform.size.width = window.innerWidth;
-    transform.size.height = window.innerHeight;
-    // update the half-width and half-height position
-    transform.position.x = transform.size.width * 0.5;
-    transform.position.y = transform.size.height * 0.5;
-    // update the size of the canvas
-    d3.select( locals['canvas'] )
-        .attr({ width : transform.size.width, height : transform.size.height });
-    // do an update after finished resizing
-    return this.invokeQueue.push( inject( InternalUpdate, [ locals ], this ) ) && this.ExecuteQueue( );
-};
+// private: 
 
-function InternalDraw( locals ) {
-    if( !this.ready )
-        return false;
-    var transform = locals.GetComponent( 'transform' ); 
-    locals.device.clearRect( 0, 0, transform.size.width, transform.size.height );
-    // loop through all components and draw them
-    var components = locals['components'], name;
-    for( name in components )
-        components[name].Draw( );
-};
-
-function InternalUpdate( locals ) {
-    if( !this.ready )
-        return false;
-
-    var transform = locals.GetComponent('transform');
-    // update the scale
-    var minRange = DEFAULTS['HGRAPH_RANGE_MINIMUM'] * transform.scale,
-        maxRange = DEFAULTS['HGRAPH_RANGE_MAXIMUM'] * transform.scale;       
-    locals.scoreScale.range([ minRange, maxRange ]);
-    // loop through all components and update them
-    var components = locals['components'], name;
-    for( name in components )
-        components[name].Update( );
+var // a hash of private object scopes
+    localsHash = { },
+    // a private hash of function prototypes
+    protoHash = { },
+    // update callbacks
+    updaters = { },
+    // update timeout id
+    updateTimeoutID = null;
     
-    return this.invokeQueue.push( inject( InternalDraw, [ locals ], this ) ) && this.ExecuteQueue( );
-};
-
-function InternalMouseMove( locals ) {
-    if( !this.ready )
-        return false;
+function UpdateAll( ) {
     
-    // get the event from d3
-    var evt = d3.event;
-    // use the first touch event if they exist
-    if( evt['touches'] )
-        evt = evt['touches'][0];
-
-    locals['mouse'].currentPositon.x = evt.pageX - locals['container'].offsetLeft;
-    locals['mouse'].currentPositon.y = evt.pageY - locals['container'].offsetTop;
-
-    var dx = locals['mouse'].currentPositon.x - locals['mouse'].lastPosition.x,
-        dy = locals['mouse'].currentPositon.y - locals['mouse'].lastPosition.y;
-
-    if( locals['mouse'].isDown ) {
-        locals['mouse'].hasDragged = true;
-        var transform = locals.GetComponent('transform');
-        transform.scale += dy / 1000;
-        if( transform.scale < 0.5 ) transform.scale = 0.5;
-        transform.rotation += dx;
-    }
-
-    locals['mouse'].lastPosition.x = locals['mouse'].currentPositon.x;
-    locals['mouse'].lastPosition.y = locals['mouse'].currentPositon.y;
-
-    evt.preventDefault && evt.preventDefault( );
-
-    // mouse move is an event where we need to update, add it to the queue and execute
-    return this.invokeQueue.push( inject( InternalUpdate, [ locals ], this ) ) && this.ExecuteQueue( );
-};
-
-function InternalMouseUp( locals ) {
-    if( !this.ready )
-        return false;
-
-    var evt = d3.event;
-
-    locals['mouse'].isDown = false;
+    forEach( updaters, function( fn ) {
+        if( isFn( fn ) ) { fn( ); }
+    });
     
-    setTimeout(function( ) { 
-        locals['mouse'].hasDragged = false;
-    }, 30 );
-
-    return evt.preventDefault && evt.preventDefault( );
+    if( UpdateAll.looping )
+        updateTimeoutID = setTimeout( UpdateAll, 10 );
+    else
+        UpdateAll.Stop( );
 };
 
-function InternalMouseDown( locals ) {
-    if( !this.ready )
-        return false;
+UpdateAll.looping = false;
 
-    var evt = d3.event;
-
-    if( evt['touches'] )
-        evt = evt['touches'][0];
-
-    locals['mouse'].lastPosition.x = evt.pageX - locals['container'].offsetLeft;
-    locals['mouse'].lastPosition.y = evt.pageY - locals['container'].offsetTop;
-    locals['mouse'].isDown = true;
-
-    return evt.preventDefault && evt.preventDefault( );
+UpdateAll.Begin = function( ) {
+    UpdateAll.looping = true;
+    return UpdateAll( );
 };
 
-function InternalZoom( locals ) {    
-    var transform = locals.GetComponent('transform');
-
-    // increate the scale (zooming in)
-    transform.scale = ( this.zoomed ) ? 0.5 : 2.0;
-    transform.position.x = ( this.zoomed ) ? transform.size.width / 2.0 : 0.0;
-
-    this.zoomed = !this.zoomed;
-
-    // execute the new stack
-    return this.invokeQueue.push( inject( InternalUpdate, [ locals ], this ) ) && this.ExecuteQueue( );
+UpdateAll.Stop = function( ) {
+    UpdateAll.looping = false;  
+    clearTimeout( updateTimeoutID );
 };
-
-function InternalClick( locals ) {
-    var evt = d3.event,
-        clickX = evt.pageX - locals['container'].offsetLeft,
-        clickY = evt.pageY - locals['container'].offsetTop,
-        pointManager = locals.GetComponent('pointManager');
     
-    // don't execute clicks if there has been a drag
-    if( locals['mouse'].hasDragged )
-        return;
-    
-    if( pointManager.CheckClick( clickX, clickY ) )
-        return this.invokeQueue.push( inject( InternalZoom, [ locals ], this ) ) && this.ExecuteQueue( );
-};
-
-function InternalInitialize( locals ) {
-    if( !this.ready )
-        return false;
-
-    // add points to the point manager
-    var pointManager = locals.GetComponent('pointManager'),
-        healthPoints = locals['payload'].points;
+// GetPayloadData
+// function used to search through a graph's container dom and return a parsed
+// object representing the hData that will be used in the graph
+// @param {DOM object} the container
+// @returns {object} a parsed data object that has passed through hGraph.Data.parse
+function GetPayloadData( container ) {
+    var payload = [ ],
+        selectionQuery = DEFAULTS['HGRAPH_PAYLOAD_TRIGGERS'].join(',');
         
-    for( var i = 0; i < healthPoints.length; i++ )
-        healthPoints[i] = pointManager.AddPoint( healthPoints[i] );
+    function PushPayloadData( ) {
+        if( this.value )
+            payload.push( hGraph.Data.Parse( this.value ) );
+    };
     
-    // loop through all components and initialize them
-    var components = locals['components'], name;
-    for( name in components )
-        components[name].Initialize( locals );
+    // find all elements with payload data flags and add their data into the 
+    // payaload array 
+    d3.select( container ).selectAll( selectionQuery )
+        .each( PushPayloadData );
+        
+    return payload.length > 0 ? payload[0] : { };
+};
+
+function Render( ) {
+    var locals = localsHash[this.uid],
+        camera = locals['camera'],
+        scene = locals['scene'],
+        renderer = locals['renderer'];
+            
+    renderer.render( scene, camera );
+};
+
+function Update( ) {
+    var locals = localsHash[this.uid],
+        camera = locals['camera'],
+        mouse = locals['mouse'],
+        components = locals['components'];
     
-    // set default graph text properties
-    locals['device'].font = DEFAULTS['HGRAPH_CANVAS_TEXT'];
-    locals['device'].textAlign = DEFAULTS['HGRAPH_CANVAS_TEXTALIGN'];
+    if( mouse.isDown )
+        mouse.downCount += 0.15;
     
-    return this.invokeQueue.push( inject( InternalUpdate, [ locals ], this ) ) && this.ExecuteQueue( );
+    for( var i = 0; i < components.length; i++ )
+        components[i].Update( mouse );
+        
+    protoHash[this.uid].Render( );
+};
+
+function Initialize( ) {
+    var locals = localsHash[this.uid],
+        scene = locals['scene'],
+        components = locals['components'],
+        payload = locals['payload'],
+        points = isArr( payload['points'] ) ? payload['points'] : [ ],
+        // start creating the components
+        ring = new hGraph.Graph.Ring( ),
+        rootRange = new THREE.Vector3( 0, 360, 0 ),
+        pointManager = new hGraph.Graph.PointManager( points, false, rootRange );
+    
+    // insert the ring into the components
+    components.push( ring );
+    components.push( pointManager );
+    
+    for( var i = 0; i < components.length; i++ )
+        components[i].Initialize( scene );
+    
+    return protoHash[this.uid].Resize( );
+};
+
+function Resize( ) {
+    var locals = localsHash[this.uid],
+        canvas = locals['canvas'],
+        camera = locals['camera'],
+        renderer = locals['renderer'],
+        dimensions = locals['dimensions'];
+    
+    // store the window dimensions into the local dimension object
+    dimensions.x = window.innerWidth;
+    dimensions.y = window.innerHeight;
+    
+    var halfWidth = dimensions.x * 0.5,
+        halfHeight = dimensions.y * 0.5;
+    
+    // update the camera
+    camera.left = -halfWidth;
+    camera.right = halfWidth;
+    camera.top = halfHeight;
+    camera.bottom = -halfHeight;
+    camera.updateProjectionMatrix( );
+    
+    // update the renderer's size
+    renderer.setSize( dimensions.x, dimensions.y );
+    
+    // if this graph's update was not already in the loop, add it now
+    if( !updaters[this.uid] )
+        updaters[this.uid] = protoHash[this.uid].Update;
+};
+
+function ExecuteQueue( ) {
+    var fn;
+    while( fn = this.invokeQueue.pop( ) )
+        if( isFn( fn ) ) { fn( ); }
 };
 
 function Graph( config ) {
-    // while the graph is being prepared, it is not ready
     this.ready = false;
     
-    // if no configuration was passed in for this graph, end    
     if( !config )
-        return false;
-    
-    var // local references
-        _uid = config.uid || createUID( ),
-        _container = config.container,
-        _canvas = document.createElement('canvas'),
-        _device = _canvas.getContext('2d'),
-        _mouse = { 
-            currentPositon : {
-                x : 0, 
-                y : 0
-            },
-            lastPosition : {
-                x : 0,
-                y : 0
-            },
-            isDown : false,
-            hasDragged : false,
-        },
-        _components = { };
+        throw new hGraph.Error('Graphs must be created with a configuration parameter');
         
+    var local = { },
+        canvas = document.createElement('canvas');
+    
+    // make sure this graph knows who it is    
+    this.uid = isStr( config.uid ) ? config.uid : createUID( );
+    // store the container in the graph's local object hash
+    local['container'] = config.container || document.createElement('div');
+    // try to find payload data
+    local['payload'] = GetPayloadData( local['container'] );
+        
+    local['renderer'] = new THREE.CanvasRenderer({ canvas : canvas });
+    local['dimensions'] = new THREE.Vector2( window.innerWidth, window.innerHeight );
+    
+    var halfWidth = local['dimensions'].x * 0.5,
+        halfHeight = local['dimensions'].y * 0.5;
+    
+    local['camera'] = new THREE.OrthographicCamera( -halfWidth, halfWidth, halfHeight, -halfHeight, -50, 1000 );
+    //local['camera'].position.z = 200;
+    
+      // try adding the canvas into the container
     try { 
-        // add the canvas to the container
-    	_container.appendChild( _canvas );
+        // remove the payload element by clearing the html
+        local['container'].innerHTML = "";
+        // append the canvas into the div
+        local['container'].appendChild( local['renderer'].domElement );
     } catch( e ) {
-        this.ready = false;
-        throw hGraph.Error('unable to insert a graph canvas into the specified container');
-    }
-    
-    // add the components that will make up this graph
-    _components['transform'] = new hGraph.Graph.Transform( );
-    _components['ring'] = new hGraph.Graph.Ring( );
-    _components['web'] = new hGraph.Graph.Web( );
-    _components['pointManager'] = new hGraph.Graph.PointManager( );
-    
-    // save all of those locals into a local object to be injected
-    var locals = {
-        uid : _uid,
-        container : _container,
-        canvas : _canvas,
-        device : _device,
-        mouse : _mouse,
-        components : _components,
-        scoreScale : d3.scale.linear( )
-                        .domain([0,100])
-                        .range([ DEFAULTS['HGRAPH_RANGE_MINIMUM'], DEFAULTS['HGRAPH_RANGE_MAXIMUM'] ])
+        throw new hGraph.Error('Attempted to use an invalid container for graph: ' + local['uid'] );
     };
     
-    // GetComponent
-    // a helper function that will return a component in the local component list based on a name
-    // @param {string} the name of the component in the hash
-    // @returns {object} a component that was created in the ComponentFactory
-    locals.GetComponent = function( name ) {
-        if( !this.components[name] )
-            throw hGraph.Error('that component does not exist');
-            
-        return this.components[name];
+    local['scene'] = new THREE.Scene( );
+    local['components'] = [ ];
+    local['mouse'] = { isDown : false, downCount : 0 };
+     
+    // save all the local information in the private local hash
+    localsHash[ this.uid ] = local;
+    // save injected draw and update functions into the private function storage
+    protoHash[ this.uid ] = { 
+        Update : inject( Update, [ ], this ),
+        Render : inject( Render, [ ], this ),
+        Resize : inject( Resize, [ ], this )
     };
     
-    var MouseMove = inject( InternalMouseMove, [ locals ], this ),
-        MouseDown = inject( InternalMouseDown, [ locals ], this ),
-        MouseUp = inject( InternalMouseUp, [ locals ], this ),
-        CheckClick = inject( InternalClick, [ locals ], this ),
-        Resize = inject( InternalResize, [ locals ], this );
-            
-    d3.select( _canvas )
-        .attr( 'hgraph-layer', 'data' )
-        .on( 'mousemove', MouseMove )
-        .on( 'mousedown', MouseDown )
-        .on( 'mouseup', MouseUp )
-        .on( 'click', CheckClick )
-        .attr({ 
-            width : _components['transform'].size.width,
-            height : _components['transform'].size.height, 
+    function MouseDown( loc ) {
+        return (function( ) {
+            var m = loc['mouse'];
+            m.isDown = true;
+            m.downCount = 0;
         });
+    };
     
-    d3.select( document )
-        .on( 'mouseup', MouseUp )
-        .on( 'touchstart', MouseDown )
-        .on( 'touchend', MouseUp )
-        .on( 'touchmove', MouseMove );
+    function MouseUp( loc ) {
+        return (function( ) {
+            var m = loc['mouse'];
+            m.isDown = false;
+            m.downCount = 0;
+        });
+    };
     
-    locals['device'].scale( 2.0, 2.0 );
     
-    hResizeCallbacks.push( Resize );    
+    d3.select( local['container'] ) 
+        .on( 'mousedown', MouseDown( local ) )
+        .on( 'mouseup', MouseUp( local ) )
+        .on( 'touchstart', MouseDown( local ) )
+        .on( 'touchend', MouseUp( local ) );
     
-    // attempt to access payload data
-    var payload = false;
-    d3.select( _container ).select( DEFAULTS['HGRAPH_PAYLOAD_TRIGGERS'].join(',') ).each(function( ) {
-        if( this.value )
-            payload = hGraph.Data.Parse( this.value );
-    });
+     // add an injected Resize function to the global-private list
+    __ResizeCallbacks.push( protoHash[ this.uid ].Resize );
     
-    if( !payload || !payload.formatted || !payload.points )
-        throw hGraph.Error('no payload information found for the graph');
-    
-    // if the payload object exists, it must be okay (save it)
-    locals['payload'] = payload;
-
-    // flag the graph as being ready for initialization
     this.ready = true;
-    this.zoomed = false;
-    
-    // the invoke queue starts with initialization 
-    this.invokeQueue = [ Resize, inject( InternalInitialize, [ locals ], this ) ];
+    this.invokeQueue = [ inject( Initialize, [ ], this ) ];
 };
 
 Graph.prototype = {
         
     constructor : Graph,    
-    
-    Initialize : function( ) {
-        if( this.ready )
-            this.ExecuteQueue( );
-    },
-    
-    ExecuteQueue : function( ) {
-        var fn;
-        while( fn = this.invokeQueue.pop( ) )
-            if( isFn( fn ) ) { fn( ); }
+    version : CONFIG['GRAPH_VERSION'],
+    Initialize : function( ){
+        
+        // run the private initialization call
+        if( this.uid && this.ready )
+            ExecuteQueue.call( this );
+            
+        if( !UpdateAll.looping )
+            UpdateAll.Begin( );
     }
-    
 };
 
 return Graph;
+
+window.ShutDown = UpdateAll.Stop;
 
 })( );
