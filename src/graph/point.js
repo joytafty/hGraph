@@ -7,18 +7,22 @@ var // local hash just like in graph
 
 function Point( proto ) {
         
-    proto.Update = function( ) { 
+    proto.Update = function( mouse ) { 
         var local = localsHash[this.uid],
             object = local['object'],
+            position = local['position'],
             subManager = local['subManager'];
+            
         
+            
         // make sure all sub points are updated as well
-        subManager.Update( );
+        subManager.Update( mouse );
     };
     
     proto.Initialize = function( scene ) {
         var local = localsHash[this.uid],
             object = local['object'],
+            position = local['position'],
             subManager = local['subManager'],
             manager = local['manager'],
             index = local['index'],
@@ -32,11 +36,11 @@ function Point( proto ) {
             
         subManager.SetDegreeRange( subStart, subEnd );
         
-        var xpos = Math.cos( toRad( startTheta + (thetaInc * index) ) ) * 100,
-            ypos = Math.sin( toRad( startTheta + (thetaInc * index) ) ) * 100;
+        var xpos = Math.cos( toRad( startTheta + (thetaInc * index) ) ) * 150,
+            ypos = Math.sin( toRad( startTheta + (thetaInc * index) ) ) * 150;
             
-        object.position.x = xpos;
-        object.position.y = ypos;
+        position.x = object.position.x = xpos;
+        position.y = object.position.y = ypos;
     
         // add this object into the scene
         scene.add( local['object'] );  
@@ -57,9 +61,10 @@ Point['constructor'] = function( parameters, manager, index ) {
         
     local['index'] = index;
     // geometric properties
-    local['geometry'] = new THREE.CircleGeometry( 15, 3 );
-    local['material'] = new THREE.MeshBasicMaterial({ color : color, opacity : opacity });
+    local['geometry'] = new THREE.CircleGeometry( 15, 10 );
+    local['material'] = new THREE.MeshBasicMaterial({ color : color, opacity : opacity, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
+    local['position'] = new THREE.Vector2( 0, 0 );
     local['manager'] = manager;
     
     // point data properties

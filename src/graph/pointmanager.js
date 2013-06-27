@@ -7,12 +7,12 @@ var // local hash just like in graph
 
 function PointManager( proto ) {
         
-    proto.Update = function( ) { 
+    proto.Update = function( mouse ) { 
         var local = localsHash[ this.uid ],
             points = local['points'];
         
         for( var i = 0; i < points.length; i++ )
-            points[i].Update( );
+            points[i].Update( mouse );
     };
     
     proto.Initialize = function( scene ) {

@@ -44,8 +44,8 @@ THREE.CircleGeometry = function ( radius, segments, thetaStart, thetaLength ) {
 
 	}
 
-	this.computeCentroids();
-	this.computeFaceNormals();
+	this.computeCentroids( );
+	this.computeFaceNormals( );
 
 	this.boundingSphere = new THREE.Sphere( new THREE.Vector3(), radius );
 

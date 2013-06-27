@@ -10,12 +10,6 @@ function Ring( proto ) {
     proto.Update = function( mouse ) { 
         var local = localsHash[ this.uid ],
             object = local['object'];
-        
-        if( mouse.isDown ) { 
-            var add = Math.sin( mouse.downCount ) * 1;
-            object.scale.x = object.scale.y = object.scale.z = Math.abs( add );
-        }
-        
     };
     
     proto.Initialize = function( scene ) {
@@ -32,10 +26,10 @@ Ring['constructor'] = function( ) {
     this.uid = createUID( );
     var local = { };
         
-    local['geometry'] = new THREE.RingGeometry( 150, 200, 3 );
-    local['material'] = new THREE.MeshBasicMaterial({ color : 0x97be8c });
+    local['geometry'] = new hGraph.Graph.RingGeometry( 150, 200, 25 );
+    local['material'] = new THREE.MeshBasicMaterial({ color : 0x97be8c, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
-    
+
     // save the local variables into the hash
     localsHash[ this.uid ] = local;
     

@@ -21,7 +21,7 @@ function UpdateAll( ) {
     });
     
     if( UpdateAll.looping )
-        updateTimeoutID = setTimeout( UpdateAll, 10 );
+        updateTimeoutID = requestAnimationFrame( UpdateAll );
     else
         UpdateAll.Stop( );
 };
@@ -35,7 +35,7 @@ UpdateAll.Begin = function( ) {
 
 UpdateAll.Stop = function( ) {
     UpdateAll.looping = false;  
-    clearTimeout( updateTimeoutID );
+    cancelAnimationFrame( updateTimeoutID );
 };
     
 // GetPayloadData
@@ -163,9 +163,8 @@ function Graph( config ) {
         halfHeight = local['dimensions'].y * 0.5;
     
     local['camera'] = new THREE.OrthographicCamera( -halfWidth, halfWidth, halfHeight, -halfHeight, -50, 1000 );
-    //local['camera'].position.z = 200;
     
-      // try adding the canvas into the container
+    // try adding the canvas into the container
     try { 
         // remove the payload element by clearing the html
         local['container'].innerHTML = "";

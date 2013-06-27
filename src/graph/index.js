@@ -1,4 +1,5 @@
 import "graph"
+import "geometries/"
 import "ring"
 import "pointmanager"
 import "point"

@@ -24,21 +24,7 @@ THREE.Scene.prototype = Object.create( THREE.Object3D.prototype );
 
 THREE.Scene.prototype.__addObject = function ( object ) {
 
-	if ( object instanceof THREE.Light ) {
-
-		if ( this.__lights.indexOf( object ) === - 1 ) {
-
-			this.__lights.push( object );
-
-		}
-
-		if ( object.target && object.target.parent === undefined ) {
-
-			this.add( object.target );
-
-		}
-
-	} else if ( !( object instanceof THREE.Camera || object instanceof THREE.Bone ) ) {
+    if ( !( object instanceof THREE.Camera ) ) {
 
 		if ( this.__objects.indexOf( object ) === - 1 ) {
 
@@ -69,17 +55,7 @@ THREE.Scene.prototype.__addObject = function ( object ) {
 
 THREE.Scene.prototype.__removeObject = function ( object ) {
 
-	if ( object instanceof THREE.Light ) {
-
-		var i = this.__lights.indexOf( object );
-
-		if ( i !== -1 ) {
-
-			this.__lights.splice( i, 1 );
-
-		}
-
-	} else if ( !( object instanceof THREE.Camera ) ) {
+    if ( !( object instanceof THREE.Camera ) ) {
 
 		var i = this.__objects.indexOf( object );
 
