@@ -80,10 +80,6 @@ RingGeometry.prototype.SetRadius = function( inner, outer ) {
     return true;
 };
 
-RingGeometry.prototype.Render = function( ) {
-    alert('hi');    
-};
-
 return RingGeometry;
 
 })( );

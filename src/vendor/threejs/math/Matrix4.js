@@ -601,7 +601,7 @@ THREE.Matrix4.prototype = {
 	setPosition: function ( v ) {
 
 		var te = this.elements;
-
+        
 		te[12] = v.x;
 		te[13] = v.y;
 		te[14] = v.z;

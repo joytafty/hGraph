@@ -12,6 +12,7 @@ THREE.Projector = function () {
 	_face4Count, _face4Pool = [], _face4PoolLength = 0,
 	_line, _lineCount, _linePool = [], _linePoolLength = 0,
 	_particle, _particleCount, _particlePool = [], _particlePoolLength = 0,
+	_circle, _circlePool = [ ], _circlePoolLength = 0, _circleCount = 0,
 
 	_renderData = { objects: [], sprites: [], lights: [], elements: [] },
 
@@ -96,22 +97,21 @@ THREE.Projector = function () {
 		for ( o = 0, ol = _renderData.objects.length; o < ol; o ++ ) {
 
 			object = _renderData.objects[ o ].object;
-
+			
 			_modelMatrix = object.matrixWorld;
 
 			_vertexCount = 0;
-
-		
+			
 			geometry = object.geometry;
 
 			vertices = geometry.vertices;
 			faces = geometry.faces;
 			faceVertexUvs = geometry.faceVertexUvs;
-
-			_normalMatrix.getNormalMatrix( _modelMatrix );
+            
+			//_normalMatrix.getNormalMatrix( _modelMatrix );
 			
 			for ( v = 0, vl = vertices.length; v < vl; v ++ ) {
-
+                        
 				_vertex = getNextVertexInPool( );
                 
                 _vertex.positionWorld.x = vertices[ v ].x;
@@ -145,8 +145,25 @@ THREE.Projector = function () {
 				if ( material === undefined ) continue;
 
 				var side = material.side;
-
-				if ( face instanceof THREE.Face3 ) {
+                
+                
+                if( face instanceof hGraph.Graph.CircleFace ) { 
+                    
+                    // there should only be one vertex in the vertex pool
+                    v1 = _vertexPool[0];
+                    
+                    // get a new renderable circle
+                    _face = getNextCircleInPool( );
+                    
+                    _face.center.positionWorld.x = v1.positionWorld.x;
+                    _face.center.positionWorld.y = v1.positionWorld.y;
+                    _face.center.positionWorld.z = v1.positionWorld.z;
+                    
+                    _face.center.positionScreen.x = v1.positionScreen.x;
+                    _face.center.positionScreen.y = v1.positionScreen.y;
+                    _face.center.positionScreen.z = v1.positionScreen.z;
+                    
+                } else if ( face instanceof THREE.Face3 ) {
 
 					v1 = _vertexPool[ face.a ];
 					v2 = _vertexPool[ face.b ];
@@ -190,13 +207,13 @@ THREE.Projector = function () {
 						continue;
 					}
 				}
+				
 				_face.color = face.color;
 				_face.material = material;
 				_renderData.elements.push( _face );
 			}
 		}
-		
-		
+
 		return _renderData;
 
 	};
@@ -233,6 +250,14 @@ THREE.Projector = function () {
 
 		return _vertexPool[ _vertexCount ++ ];
 
+	}
+	
+	function getNextCircleInPool( ) {
+        var circle = new hGraph.Graph.RenderableCircle( );
+		_circlePool.push( circle );
+		_circlePoolLength ++;
+		_circleCount ++;
+		return circle;
 	}
 
 	function getNextFace3InPool() {

@@ -76,11 +76,13 @@ PointManager['constructor'] = function( data, subFlag, parentRange ) {
     // save the local hash into the private hash
     localsHash[ this.uid ] = local;
     
-    while( point = points.pop( ) ){ 
+    var i = 0;
+    while( point = points.pop( ) &&  i < 1 ){ 
         // create a new point
         var p = new hGraph.Graph.Point( point, this, points.length );
         // add the point into the local hash
         local['points'].push( p );
+        i++;
     }
     
 };

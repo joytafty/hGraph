@@ -392,7 +392,6 @@ THREE.Object3D.prototype = {
 		// if we are not using a quaternion directly, convert Euler rotation to this.quaternion.
 
 		if ( this.useQuaternion === false )  {
-
 			this.matrix.makeFromPositionEulerScale( this.position, this.rotation, this.eulerOrder, this.scale );
 
 		} else {
@@ -400,18 +399,21 @@ THREE.Object3D.prototype = {
 			this.matrix.makeFromPositionQuaternionScale( this.position, this.quaternion, this.scale );
 
 		}
+                
 
 		this.matrixWorldNeedsUpdate = true;
 
 	},
 
 	updateMatrixWorld: function ( force ) {
-
-		if ( this.matrixAutoUpdate === true ) this.updateMatrix();
+            
+        
+		if ( this.matrixAutoUpdate === true ) this.updateMatrix( );
 
 		if ( this.matrixWorldNeedsUpdate === true || force === true ) {
 
 			if ( this.parent === undefined ) {
+                
 
 				this.matrixWorld.copy( this.matrix );
 

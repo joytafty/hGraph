@@ -10,6 +10,8 @@ function Ring( proto ) {
     proto.Update = function( mouse ) { 
         var local = localsHash[ this.uid ],
             object = local['object'];
+            
+        object.position.x = 0 + ( Math.sin( mouse.downCount ) * 10 );
     };
     
     proto.Initialize = function( scene ) {

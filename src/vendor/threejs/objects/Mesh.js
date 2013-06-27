@@ -27,11 +27,11 @@ THREE.Mesh.prototype.setGeometry = function ( geometry ) {
 
 		if ( this.geometry.boundingSphere === null ) {
 
-			this.geometry.computeBoundingSphere();
+			//this.geometry.computeBoundingSphere();
 
 		}
 
-		this.updateMorphTargets();
+		//this.updateMorphTargets();
 
 	}
 
@@ -52,7 +52,9 @@ THREE.Mesh.prototype.setMaterial = function ( material ) {
 };
 
 THREE.Mesh.prototype.updateMorphTargets = function () {
-
+    
+    return true;
+    
 	if ( this.geometry.morphTargets.length > 0 ) {
 
 		this.morphTargetBase = -1;
