@@ -383,8 +383,10 @@ THREE.CanvasRenderer = function ( parameters ) {
 
 
         function renderCircleFace( x, y, r, element, mat ) {
-            
+        
             _color.copy( material.color );
+            setOpacity( material.opacity );
+			setBlending( material.blending );
 
             if ( material.vertexColors === THREE.FaceColors )
                 _color.multiply( element.color );

@@ -13,9 +13,11 @@ function Point( proto ) {
             position = local['position'],
             subManager = local['subManager'];
         
-        object.position.x = 0 + ( Math.sin( mouse.downCount ) * 10 );
+        object.position.x = position.x;
+        object.position.y = position.y;
+        
         // make sure all sub points are updated as well
-        //subManager.Update( mouse );
+        subManager.Update( mouse );
     };
     
     proto.Initialize = function( scene ) {
@@ -33,7 +35,7 @@ function Point( proto ) {
         var subStart = startTheta + (thetaInc * index),
             subEnd = subStart + thetaInc;
             
-        //subManager.SetDegreeRange( subStart, subEnd );
+        subManager.SetDegreeRange( subStart, subEnd );
         
         var xpos = Math.cos( toRad( startTheta + (thetaInc * index) ) ) * 150,
             ypos = Math.sin( toRad( startTheta + (thetaInc * index) ) ) * 150;
@@ -44,7 +46,7 @@ function Point( proto ) {
         // add this object into the scene
         scene.add( local['object'] );  
         // make sure all sub points get initialized as well
-        //subManager.Initialize( scene );
+        subManager.Initialize( scene );
     };
 
 };
@@ -60,7 +62,7 @@ Point['constructor'] = function( parameters, manager, index ) {
         
     local['index'] = index;
     // geometric properties
-    local['geometry'] = new hGraph.Graph.CircleGeometry( 10, new THREE.Vector3( 22, 10, 10 ) );
+    local['geometry'] = new hGraph.Graph.CircleGeometry( 10 );
     local['material'] = new THREE.MeshBasicMaterial({ color : color, opacity : opacity, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
     local['position'] = new THREE.Vector2( 0, 0 );
@@ -78,9 +80,10 @@ Point['constructor'] = function( parameters, manager, index ) {
     local['dependencies'] = parameters.dependencies || [ ];
     
     // create a sub manager with the points that this point depends on
-    //subManager = new hGraph.Graph.PointManager( local['dependencies'], true, manager.GetDegreeRange( ) );
+    subManager = new hGraph.Graph.PointManager( local['dependencies'], true, manager.GetDegreeRange( ) );
+    subManager.subFlag = true;
     
-    //local['subManager'] = subManager;
+    local['subManager'] = subManager;
     
     localsHash[this.uid] = local;
 };

@@ -9364,6 +9364,8 @@ THREE.Projector = function () {
                     _face.center.positionScreen.y = v1.positionScreen.y;
                     _face.center.positionScreen.z = v1.positionScreen.z;
                     
+                    _face.radius = face.radius;
+                                       
                 } else if ( face instanceof THREE.Face3 ) {
 
 					v1 = _vertexPool[ face.a ];
@@ -11971,8 +11973,10 @@ THREE.CanvasRenderer = function ( parameters ) {
 
 
         function renderCircleFace( x, y, r, element, mat ) {
-            
+        
             _color.copy( material.color );
+            setOpacity( material.opacity );
+			setBlending( material.blending );
 
             if ( material.vertexColors === THREE.FaceColors )
                 _color.multiply( element.color );
@@ -13452,7 +13456,6 @@ hGraph.Graph.CircleFace = (function( ) {
 function CircleFace( radius, color ) {
     this.radius = radius || 10;
     this.color = color || new THREE.Color( );
-    this.centroid = new THREE.Vector3( );
 };
 
 CircleFace.prototype = { };
@@ -13475,85 +13478,21 @@ return RenderableCircle;
 })( );
 hGraph.Graph.RingGeometry = (function( ) {
 
-function ComputeVerts( innerRadius, outerRadius ) {
+function RingGeometry( position, innerRadius, outerRadius ) {
 
-    var i, o, 
-        uvs = [], 
-        innerRadius = this.innerRadius,
-        outerRadius = this.outerRadius,
-        radius = this.outerRadius, 
-        thetaSegments = this.thetaSegments,
-        thetaStart = this.thetaStart,
-        thetaLength = this.thetaLength,
-        phiSegments = 1,
-        radiusStep = ( ( outerRadius - innerRadius ) / phiSegments );
+    var pos = position || new THREE.Vector3( 0, 0, 0 ),
+        face1 = new hGraph.Graph.CircleFace( innerRadius ),
+        face2 =  new hGraph.Graph.CircleFace( outerRadius );
     
-    this.vertices = [ ];
-        
-	for ( i = 0; i <= phiSegments; i ++ ) { 
-		for ( o = 0; o <= thetaSegments; o ++ ) {
-			var vertex = new THREE.Vector3();
-			var segment = thetaStart + o / thetaSegments * thetaLength;
-
-			vertex.x = radius * Math.cos( segment );
-			vertex.y = radius * Math.sin( segment );
-
-			this.vertices.push( vertex );
-			uvs.push( new THREE.Vector2( ( vertex.x / radius + 1 ) / 2, - ( vertex.y / radius + 1 ) / 2 + 1 ) );
-		}
-		radius += radiusStep;
-	}
-	
-	var n = new THREE.Vector3( 0, 0, 1 );
+    this.vertices = [ pos ];
+    this.faces = [ face1, face2 ];
     
-    this.faces = [ ];
-	for ( i = 0; i < phiSegments; i ++ ) {
-	
-		var thetaSegment = i * thetaSegments;
-		for ( o = 0; o <= thetaSegments; o ++ ) { 
-			var segment = o + thetaSegment;
-			var v1 = segment + i;
-			var v2 = segment + thetaSegments + i;
-			var v3 = segment + thetaSegments + 1 + i;
-			this.faces.push( new THREE.Face3( v1, v2, v3, [ n, n, n ] ) );
-			this.faceVertexUvs[ 0 ].push( [ uvs[ v1 ], uvs[ v2 ], uvs[ v3 ] ]);
-			v1 = segment + i;
-			v2 = segment + thetaSegments + 1 + i;
-			v3 = segment + 1 + i;
-			this.faces.push( new THREE.Face3( v1, v2, v3, [ n, n, n ] ) );
-			this.faceVertexUvs[ 0 ].push( [ uvs[ v1 ], uvs[ v2 ], uvs[ v3 ] ]);
-		}
-	}
-    
-	this.computeCentroids( );
-	this.computeFaceNormals( );  
-};
-
-function RingGeometry( innerRadius, outerRadius, thetaSegments, thetaStart, thetaLength ) {
-    THREE.Geometry.call( this );
-    
-    this.innerRadius = innerRadius || 0;
-	this.outerRadius = outerRadius || 50;
-	
-    this.thetaStart = thetaStart !== undefined ? thetaStart : 0;
-	this.thetaLength = thetaLength !== undefined ? thetaLength : Math.PI * 2;
-
-	this.thetaSegments = thetaSegments !== undefined ? Math.max( 3, thetaSegments ) : 8;
-	
-    ComputeVerts.call( this );
-    
-	this.boundingSphere = new THREE.Sphere( new THREE.Vector3(), outerRadius );
-	
+	this.boundingSphere = new THREE.Sphere( new THREE.Vector3(), this.radius );	
 };
 
 RingGeometry.prototype = Object.create( THREE.Geometry.prototype );
 
-RingGeometry.prototype.SetRadius = function( inner, outer ) {
-    this.innerRadius = inner || this.innerRadius;
-    this.outerRadius = outer || this.outerRadius;
-    ComputeVerts.call( this );
-    return true;
-};
+RingGeometry.prototype.SetRadius = function( inner, outer ) { }
 
 return RingGeometry;
 
@@ -13619,7 +13558,6 @@ function Ring( proto ) {
         var local = localsHash[ this.uid ],
             object = local['object'];
             
-        object.position.x = 0 + ( Math.sin( mouse.downCount ) * 10 );
     };
     
     proto.Initialize = function( scene ) {
@@ -13636,7 +13574,7 @@ Ring['constructor'] = function( ) {
     this.uid = createUID( );
     var local = { };
         
-    local['geometry'] = new hGraph.Graph.RingGeometry( 150, 200, 25 );
+    local['geometry'] = new hGraph.Graph.RingGeometry( null, 150, 200 );
     local['material'] = new THREE.MeshBasicMaterial({ color : 0x97be8c, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
 
@@ -13725,13 +13663,11 @@ PointManager['constructor'] = function( data, subFlag, parentRange ) {
     // save the local hash into the private hash
     localsHash[ this.uid ] = local;
     
-    var i = 0;
-    while( point = points.pop( ) &&  i < 1 ){ 
+    while( point = points.pop( ) ){ 
         // create a new point
         var p = new hGraph.Graph.Point( point, this, points.length );
         // add the point into the local hash
         local['points'].push( p );
-        i++;
     }
     
 };
@@ -13753,9 +13689,11 @@ function Point( proto ) {
             position = local['position'],
             subManager = local['subManager'];
         
-        object.position.x = 0 + ( Math.sin( mouse.downCount ) * 10 );
+        object.position.x = position.x;
+        object.position.y = position.y;
+        
         // make sure all sub points are updated as well
-        //subManager.Update( mouse );
+        subManager.Update( mouse );
     };
     
     proto.Initialize = function( scene ) {
@@ -13773,7 +13711,7 @@ function Point( proto ) {
         var subStart = startTheta + (thetaInc * index),
             subEnd = subStart + thetaInc;
             
-        //subManager.SetDegreeRange( subStart, subEnd );
+        subManager.SetDegreeRange( subStart, subEnd );
         
         var xpos = Math.cos( toRad( startTheta + (thetaInc * index) ) ) * 150,
             ypos = Math.sin( toRad( startTheta + (thetaInc * index) ) ) * 150;
@@ -13784,7 +13722,7 @@ function Point( proto ) {
         // add this object into the scene
         scene.add( local['object'] );  
         // make sure all sub points get initialized as well
-        //subManager.Initialize( scene );
+        subManager.Initialize( scene );
     };
 
 };
@@ -13800,7 +13738,7 @@ Point['constructor'] = function( parameters, manager, index ) {
         
     local['index'] = index;
     // geometric properties
-    local['geometry'] = new hGraph.Graph.CircleGeometry( 10, new THREE.Vector3( 22, 10, 10 ) );
+    local['geometry'] = new hGraph.Graph.CircleGeometry( 10 );
     local['material'] = new THREE.MeshBasicMaterial({ color : color, opacity : opacity, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
     local['position'] = new THREE.Vector2( 0, 0 );
@@ -13818,9 +13756,10 @@ Point['constructor'] = function( parameters, manager, index ) {
     local['dependencies'] = parameters.dependencies || [ ];
     
     // create a sub manager with the points that this point depends on
-    //subManager = new hGraph.Graph.PointManager( local['dependencies'], true, manager.GetDegreeRange( ) );
+    subManager = new hGraph.Graph.PointManager( local['dependencies'], true, manager.GetDegreeRange( ) );
+    subManager.subFlag = true;
     
-    //local['subManager'] = subManager;
+    local['subManager'] = subManager;
     
     localsHash[this.uid] = local;
 };

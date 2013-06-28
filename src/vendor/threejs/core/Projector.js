@@ -163,6 +163,8 @@ THREE.Projector = function () {
                     _face.center.positionScreen.y = v1.positionScreen.y;
                     _face.center.positionScreen.z = v1.positionScreen.z;
                     
+                    _face.radius = face.radius;
+                                       
                 } else if ( face instanceof THREE.Face3 ) {
 
 					v1 = _vertexPool[ face.a ];

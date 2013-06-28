@@ -11,7 +11,6 @@ function Ring( proto ) {
         var local = localsHash[ this.uid ],
             object = local['object'];
             
-        object.position.x = 0 + ( Math.sin( mouse.downCount ) * 10 );
     };
     
     proto.Initialize = function( scene ) {
@@ -28,7 +27,7 @@ Ring['constructor'] = function( ) {
     this.uid = createUID( );
     var local = { };
         
-    local['geometry'] = new hGraph.Graph.RingGeometry( 150, 200, 25 );
+    local['geometry'] = new hGraph.Graph.RingGeometry( null, 150, 200 );
     local['material'] = new THREE.MeshBasicMaterial({ color : 0x97be8c, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
 
