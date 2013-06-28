@@ -201,47 +201,8 @@ THREE.CanvasRenderer = function ( parameters ) {
 
 	};
 
-	this.clear = function () {
-
-		_context.setTransform( 1, 0, 0, - 1, _canvasWidthHalf, _canvasHeightHalf );
-
-		if ( _clearBox.empty() === false ) {
-
-			_clearBox.intersect( _clipBox );
-			_clearBox.expandByScalar( 2 );
-
-			if ( _clearAlpha < 1 ) {
-
-				_context.clearRect(
-					_clearBox.min.x | 0,
-					_clearBox.min.y | 0,
-					( _clearBox.max.x - _clearBox.min.x ) | 0,
-					( _clearBox.max.y - _clearBox.min.y ) | 0
-				);
-
-			}
-
-			if ( _clearAlpha > 0 ) {
-
-				setBlending( THREE.NormalBlending );
-				setOpacity( 1 );
-
-				setFillStyle( 'rgba(' + Math.floor( _clearColor.r * 255 ) + ',' + Math.floor( _clearColor.g * 255 ) + ',' + Math.floor( _clearColor.b * 255 ) + ',' + _clearAlpha + ')' );
-
-				_context.fillRect(
-					_clearBox.min.x | 0,
-					_clearBox.min.y | 0,
-					( _clearBox.max.x - _clearBox.min.x ) | 0,
-					( _clearBox.max.y - _clearBox.min.y ) | 0
-				);
-
-			}
-
-			_clearBox.makeEmpty();
-
-		}
-
-
+	this.clear = function( ) {
+        _context.clearRect( 0, 0, _canvasWidth, _canvasHeight );
 	};
 
 	this.render = function ( scene, camera ) {
@@ -371,6 +332,7 @@ THREE.CanvasRenderer = function ( parameters ) {
                 y = element.center.positionScreen.y * _canvasHeightHalf;
                 r = element.radius;
 
+        
                 renderCircleFace( x, y, r, element, material );
                     
 			}

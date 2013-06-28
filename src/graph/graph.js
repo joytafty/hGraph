@@ -75,8 +75,10 @@ function Update( ) {
         mouse = locals['mouse'],
         components = locals['components'];
     
-    if( mouse.isDown )
+    if( mouse.isDown ) {
         mouse.downCount += 0.15;
+        camera.rotation.z -= 4.0;
+    }
     
     for( var i = 0; i < components.length; i++ )
         components[i].Update( mouse );
