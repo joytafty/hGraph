@@ -27,7 +27,7 @@ Ring['constructor'] = function( ) {
     this.uid = createUID( );
     var local = { };
         
-    local['geometry'] = new hGraph.Graph.RingGeometry( null, 150, 200 );
+    local['geometry'] = new hGraph.Graph.RingGeometry( null, 150, 200, new THREE.Color( 0x97be8c ) );
     local['material'] = new THREE.MeshBasicMaterial({ color : 0x97be8c, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
 

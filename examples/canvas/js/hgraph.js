@@ -11974,7 +11974,11 @@ THREE.CanvasRenderer = function ( parameters ) {
 
         function renderCircleFace( x, y, r, element, mat ) {
         
-            _color.copy( material.color );
+            if( element.color )
+                _color.copy( element.color );
+            else
+                _color.copy( mat.color );
+                
             setOpacity( material.opacity );
 			setBlending( material.blending );
 
@@ -13455,7 +13459,7 @@ hGraph.Graph.CircleFace = (function( ) {
     
 function CircleFace( radius, color ) {
     this.radius = radius || 10;
-    this.color = color || new THREE.Color( );
+    this.color = color || false;
 };
 
 CircleFace.prototype = { };
@@ -13478,11 +13482,11 @@ return RenderableCircle;
 })( );
 hGraph.Graph.RingGeometry = (function( ) {
 
-function RingGeometry( position, innerRadius, outerRadius ) {
+function RingGeometry( position, innerRadius, outerRadius, color, backColor ) {
 
     var pos = position || new THREE.Vector3( 0, 0, 0 ),
-        face1 = new hGraph.Graph.CircleFace( innerRadius ),
-        face2 =  new hGraph.Graph.CircleFace( outerRadius );
+        face1 = new hGraph.Graph.CircleFace( outerRadius, color || new THREE.Color( 0xff00ff ) ),
+        face2 =  new hGraph.Graph.CircleFace( innerRadius, backColor || new THREE.Color( 0xffffff ) );
     
     this.vertices = [ pos ];
     this.faces = [ face1, face2 ];
@@ -13574,7 +13578,7 @@ Ring['constructor'] = function( ) {
     this.uid = createUID( );
     var local = { };
         
-    local['geometry'] = new hGraph.Graph.RingGeometry( null, 150, 200 );
+    local['geometry'] = new hGraph.Graph.RingGeometry( null, 150, 200, new THREE.Color( 0x97be8c ) );
     local['material'] = new THREE.MeshBasicMaterial({ color : 0x97be8c, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
 
@@ -13733,7 +13737,7 @@ Point['constructor'] = function( parameters, manager, index ) {
     
     var local = { },
         subManager
-        color = manager.subFlag ? 0x333333 : 0x333333,
+        color = manager.subFlag ? 0x555555 : 0x454545,
         opacity = manager.subFlag ? 0.0 : 1.0;
         
     local['index'] = index;

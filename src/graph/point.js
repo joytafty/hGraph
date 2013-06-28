@@ -57,7 +57,7 @@ Point['constructor'] = function( parameters, manager, index ) {
     
     var local = { },
         subManager
-        color = manager.subFlag ? 0x333333 : 0x333333,
+        color = manager.subFlag ? 0x555555 : 0x454545,
         opacity = manager.subFlag ? 0.0 : 1.0;
         
     local['index'] = index;
