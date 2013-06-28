@@ -13504,8 +13504,10 @@ function Update( dt ) {
         components = locals['components'],
         anName;
     
-    if( mouse.isDown )
+    if( mouse.isDown ) {
         mouse.downCount += 0.15;
+        camera.rotation.z += 0.04;
+    }
     
     for( anName in animations ) {
         if( animations[anName] ) { 
@@ -13652,22 +13654,9 @@ function Graph( config ) {
             pointMan = components.GetComponent( hGraph.Graph.PointManager ),
             targeted = pointMan && pointMan.CheckClick( camera, mouse.currentScreenPosition );
         
-        if( targeted !== false ) {
-            var _startRotation = camera.rotation.z,
-                _endingRotation = toRad( targeted.GetPointTheta( ) ),
-                _rotationDiff = ( _endingRotation % PI2 ) - ( _startRotation % PI2 ),
-                _rotationInc = abs( _rotationDiff / 10 ),
-                _rotationStep = _rotationDiff < 0 ? -_rotationInc : _rotationInc,
-                _anCount = 0;
-            
-            
-            animations['rotation'] = new hGraph.Graph.Animation(function( ) {
-                camera.rotation.z += _rotationStep;
-                _rotationDiff = abs( _endingRotation - camera.rotation.z ) * 180 / PI;
-                return _rotationDiff < 1;
-            });
-            
-        } else
+        if( targeted !== false )
+            console.log( 'clicked a point');
+        else
             console.log( 'no point clicked' );
         
     };
@@ -13732,6 +13721,7 @@ function Graph( config ) {
         var  _self = this;
         return (function( ) { 
             var m = loc['mouse'],
+                cam = loc['camera'],
                 e = d3.event['touches'] ? d3.event['touches'][0] : d3.event,
                 // page coordinates:
                 px = e.pageX,
@@ -13751,6 +13741,7 @@ function Graph( config ) {
             
             m.currentWorldPosition.x = -rx;
             m.currentWorldPosition.y = ry;
+        
             
             if( ( abs( dx ) > 0 || abs( dy ) > 0 ) && m.isDown )
                 if( !m.wasDragged ) { m.wasDragged = true; }
@@ -13769,7 +13760,8 @@ function Graph( config ) {
         .on( 'mouseup', MouseUp.call( this, local ) )
         .on( 'mousemove', MouseMove.call( this, local ) )
         .on( 'touchstart', MouseDown.call( this, local ) )
-        .on( 'touchmove', MouseMove.call( this, local ) );
+        .on( 'touchmove', MouseMove.call( this, local ) )
+        .on( 'touchend', MouseUp.call( this, local ) );
     
      // add an injected Resize function to the global-private list
     __ResizeCallbacks.push( protoHash[ this.uid ].Resize );
