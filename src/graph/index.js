@@ -1,5 +1,5 @@
 import "graph";
-import "threejs-extensions/";
+import "animation";
 import "ring";
 import "pointmanager";
 import "point";

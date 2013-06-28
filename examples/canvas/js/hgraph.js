@@ -29,8 +29,28 @@ var // hGraph namespace definition
     // script-wide accessable private variables
     __RootElement = false,
     __GraphInstances = { },
-    __ResizeCallbacks = [ ];
+    __ResizeCallbacks = [ ],
+    __ScoreScale;
 
+var CONFIG = { };
+CONFIG['HGRAPH_VERSION'] = '0.01';
+var HGRAPH_WIDTH = 960,
+    HGRAPH_HEIGHT = 720,
+    HGRAPH_RANGE_MINIMUM = 60,
+    HGRAPH_RANGE_MAXIMUM = 240,
+    HGRAPH_POINT_RADIUS = 10,
+    HGRAPH_SUBPOINT_RADIUS = 8,
+    HGRAPH_GESTURE_THRESHOLD = 20,
+    HGRAPH_DEFAULT_ANIMATION_STEP = 0.002,
+    HGRAPH_CANVAS_TEXTALIGN = 'center',
+    HGRAPH_CANVAS_TEXT = '10px Arial',
+    HGRAPH_POINT_COLOR_HEALTHY = 0x616363,
+    HGRAPH_POINT_COLOR_UNHEALTHY = 0xe1604f,
+    HGRAPH_APP_BOOTSTRAPS = ['[data-hgraph-app]','[hgraph-app]'],
+    HGRAPH_GRAPH_BOOTSTRAPS = ['[data-hgraph-graph]','[hgraph-graph]'],
+    HGRAPH_PAYLOAD_TRIGGERS = ['[data-hgraph-payload]','[hgraph-payload]'],
+    HGRAPH_RING_FILL_COLOR = 0x97be8c,
+    HGRAPH_MINIMUM_FRAMETIME = 0.0001;
 /* Copyright (c) 2013, Michael Bostock
  * All rights reserved.
  *   
@@ -9213,7 +9233,6 @@ THREE.Projector = function () {
 	_face4Count, _face4Pool = [], _face4PoolLength = 0,
 	_line, _lineCount, _linePool = [], _linePoolLength = 0,
 	_particle, _particleCount, _particlePool = [], _particlePoolLength = 0,
-	_circle, _circlePool = [ ], _circlePoolLength = 0, _circleCount = 0,
 
 	_renderData = { objects: [], sprites: [], lights: [], elements: [] },
 
@@ -9238,9 +9257,45 @@ THREE.Projector = function () {
 
 	_frustum = new THREE.Frustum(),
 
-	_clippedVertex1PositionScreen = new THREE.Vector4( ),
-	_clippedVertex2PositionScreen = new THREE.Vector4( );
-	
+	_clippedVertex1PositionScreen = new THREE.Vector4(),
+	_clippedVertex2PositionScreen = new THREE.Vector4();
+
+	this.projectVector = function ( vector, camera ) {
+
+		camera.matrixWorldInverse.getInverse( camera.matrixWorld );
+
+		_viewProjectionMatrix.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
+
+		return vector.applyProjection( _viewProjectionMatrix );
+
+	};
+
+	this.unprojectVector = function ( vector, camera ) {
+
+		camera.projectionMatrixInverse.getInverse( camera.projectionMatrix );
+
+		_viewProjectionMatrix.multiplyMatrices( camera.matrixWorld, camera.projectionMatrixInverse );
+
+		return vector.applyProjection( _viewProjectionMatrix );
+
+	};
+
+	this.pickingRay = function ( vector, camera ) {
+
+		// set two vectors with opposing z values
+		vector.z = -1.0;
+		var end = new THREE.Vector3( vector.x, vector.y, 1.0 );
+
+		this.unprojectVector( vector, camera );
+		this.unprojectVector( end, camera );
+
+		// find direction from vector to end
+		end.sub( vector ).normalize();
+
+		return new THREE.Raycaster( vector, end );
+
+	};
+
 	var projectGraph = function ( root, sortObjects ) {
 
 		_objectCount = 0;
@@ -9257,10 +9312,71 @@ THREE.Projector = function () {
 
 				if ( object.visible === false ) continue;
                 
-                _object = getNextObjectInPool( );
-				_object.object = object;
-				_renderData.objects.push( _object );
-				
+                if ( object instanceof THREE.Mesh || object instanceof THREE.Line ) {
+
+					if ( object.frustumCulled === false || _frustum.intersectsObject( object ) === true ) {
+
+						_object = getNextObjectInPool();
+						_object.object = object;
+
+						if ( object.renderDepth !== null ) {
+
+							_object.z = object.renderDepth;
+
+						} else {
+
+							_vector3.getPositionFromMatrix( object.matrixWorld );
+							_vector3.applyProjection( _viewProjectionMatrix );
+							_object.z = _vector3.z;
+
+						}
+
+						_renderData.objects.push( _object );
+
+					}
+
+				} else if ( object instanceof THREE.Sprite || object instanceof THREE.Particle ) {
+
+					_object = getNextObjectInPool();
+					_object.object = object;
+
+					// TODO: Find an elegant and performant solution and remove this dupe code.
+
+					if ( object.renderDepth !== null ) {
+
+						_object.z = object.renderDepth;
+
+					} else {
+
+						_vector3.getPositionFromMatrix( object.matrixWorld );
+						_vector3.applyProjection( _viewProjectionMatrix );
+						_object.z = _vector3.z;
+
+					}
+
+					_renderData.sprites.push( _object );
+
+				} else {
+
+					_object = getNextObjectInPool();
+					_object.object = object;
+
+					if ( object.renderDepth !== null ) {
+
+						_object.z = object.renderDepth;
+
+					} else {
+
+						_vector3.getPositionFromMatrix( object.matrixWorld );
+						_vector3.applyProjection( _viewProjectionMatrix );
+						_object.z = _vector3.z;
+
+					}
+
+					_renderData.objects.push( _object );
+
+				}
+
 				projectObject( object );
 
 			}
@@ -9268,6 +9384,8 @@ THREE.Projector = function () {
 		};
 
 		projectObject( root );
+
+		if ( sortObjects === true ) _renderData.objects.sort( painterSort );
 
 		return _renderData;
 
@@ -9287,135 +9405,301 @@ THREE.Projector = function () {
 
 		_renderData.elements.length = 0;
 
-		if ( scene.autoUpdate === true ) scene.updateMatrixWorld( );
-		if ( camera.parent === undefined ) camera.updateMatrixWorld( );
+		if ( scene.autoUpdate === true ) scene.updateMatrixWorld();
+		if ( camera.parent === undefined ) camera.updateMatrixWorld();
 
-		_viewMatrix = camera.matrixWorldInverse.getInverse( camera.matrixWorld );
+		_viewMatrix.copy( camera.matrixWorldInverse.getInverse( camera.matrixWorld ) );
 		_viewProjectionMatrix.multiplyMatrices( camera.projectionMatrix, _viewMatrix );
+
+		_normalViewMatrix.getNormalMatrix( _viewMatrix );
+
 		_frustum.setFromMatrix( _viewProjectionMatrix );
+
 		_renderData = projectGraph( scene, sortObjects );
 
 		for ( o = 0, ol = _renderData.objects.length; o < ol; o ++ ) {
 
 			object = _renderData.objects[ o ].object;
-			
+
 			_modelMatrix = object.matrixWorld;
 
 			_vertexCount = 0;
-			
-			geometry = object.geometry;
 
-			vertices = geometry.vertices;
-			faces = geometry.faces;
-			faceVertexUvs = geometry.faceVertexUvs;
-            
-			//_normalMatrix.getNormalMatrix( _modelMatrix );
-			
-			for ( v = 0, vl = vertices.length; v < vl; v ++ ) {
-                        
-				_vertex = getNextVertexInPool( );
-                
-                _vertex.positionWorld.x = vertices[ v ].x;
-                _vertex.positionWorld.y = vertices[ v ].y;
-                _vertex.positionWorld.z = vertices[ v ].z;
-				_vertex.positionWorld.applyMatrix4( _modelMatrix );
-				
-                _vertex.positionScreen.x = _vertex.positionWorld.x;
-                _vertex.positionScreen.y = _vertex.positionWorld.y;
-                _vertex.positionScreen.z = _vertex.positionWorld.z;
-				_vertex.positionScreen.applyMatrix4( _viewProjectionMatrix );
+			if ( object instanceof THREE.Mesh ) {
 
-				_vertex.positionScreen.x /= _vertex.positionScreen.w;
-				_vertex.positionScreen.y /= _vertex.positionScreen.w;
-				_vertex.positionScreen.z /= _vertex.positionScreen.w;
+				geometry = object.geometry;
 
-				_vertex.visible = ! ( _vertex.positionScreen.x < -1 || _vertex.positionScreen.x > 1 ||
-						      _vertex.positionScreen.y < -1 || _vertex.positionScreen.y > 1 ||
-						      _vertex.positionScreen.z < -1 || _vertex.positionScreen.z > 1 );
+				vertices = geometry.vertices;
+				faces = geometry.faces;
+				faceVertexUvs = geometry.faceVertexUvs;
 
-			}
+				_normalMatrix.getNormalMatrix( _modelMatrix );
 
-			for ( f = 0, fl = faces.length; f < fl; f ++ ) {
+				isFaceMaterial = false;
+				objectMaterials = isFaceMaterial === true ? object.material : null;
 
-				face = faces[ f ];
+				for ( v = 0, vl = vertices.length; v < vl; v ++ ) {
 
-				var material = isFaceMaterial === true
-					? objectMaterials.materials[ face.materialIndex ]
-					: object.material;
+					_vertex = getNextVertexInPool();
 
-				if ( material === undefined ) continue;
+					_vertex.positionWorld.copy( vertices[ v ] ).applyMatrix4( _modelMatrix );
+					_vertex.positionScreen.copy( _vertex.positionWorld ).applyMatrix4( _viewProjectionMatrix );
 
-				var side = material.side;
-                
-                
-                if( face instanceof hGraph.Graph.CircleFace ) { 
-                    
-                    // there should only be one vertex in the vertex pool
-                    v1 = _vertexPool[0];
-                    
-                    // get a new renderable circle
-                    _face = getNextCircleInPool( );
-                    
-                    _face.center.positionWorld.x = v1.positionWorld.x;
-                    _face.center.positionWorld.y = v1.positionWorld.y;
-                    _face.center.positionWorld.z = v1.positionWorld.z;
-                    
-                    _face.center.positionScreen.x = v1.positionScreen.x;
-                    _face.center.positionScreen.y = v1.positionScreen.y;
-                    _face.center.positionScreen.z = v1.positionScreen.z;
-                    
-                    _face.radius = face.radius * object.scale.x;
-                                       
-                } else if ( face instanceof THREE.Face3 ) {
+					_vertex.positionScreen.x /= _vertex.positionScreen.w;
+					_vertex.positionScreen.y /= _vertex.positionScreen.w;
+					_vertex.positionScreen.z /= _vertex.positionScreen.w;
 
-					v1 = _vertexPool[ face.a ];
-					v2 = _vertexPool[ face.b ];
-					v3 = _vertexPool[ face.c ];
+					_vertex.visible = ! ( _vertex.positionScreen.x < -1 || _vertex.positionScreen.x > 1 ||
+							      _vertex.positionScreen.y < -1 || _vertex.positionScreen.y > 1 ||
+							      _vertex.positionScreen.z < -1 || _vertex.positionScreen.z > 1 );
 
-					_points3[ 0 ] = v1.positionScreen;
-					_points3[ 1 ] = v2.positionScreen;
-					_points3[ 2 ] = v3.positionScreen;
+				}
 
-					if ( v1.visible === true || v2.visible === true || v3.visible === true ||
-						_clipBox.isIntersectionBox( _boundingBox.setFromPoints( _points3 ) ) ) {
+				for ( f = 0, fl = faces.length; f < fl; f ++ ) {
 
-						visible = true;
+					face = faces[ f ];
 
-						if ( side === THREE.DoubleSide || visible === ( side === THREE.FrontSide ) ) {
-                            
-							_face = getNextFace3InPool( );
-                            
-                            var faceVerts = [
-                                { dest : _face.v1, source : v1 },
-                                { dest : _face.v2, source : v2 },
-                                { dest : _face.v3, source : v3 }
-                            ];
-                            
-                            var cVertPair;
-                            while( cVertPair = faceVerts.pop( ) ){ 
-                                
-                                cVertPair['dest'].positionWorld.x = cVertPair['source'].positionWorld.x;
-                                cVertPair['dest'].positionWorld.y = cVertPair['source'].positionWorld.y;
-                                cVertPair['dest'].positionWorld.z = cVertPair['source'].positionWorld.z;
-                                
-                                cVertPair['dest'].positionScreen.x = cVertPair['source'].positionScreen.x;
-                                cVertPair['dest'].positionScreen.y = cVertPair['source'].positionScreen.y;
-                                cVertPair['dest'].positionScreen.z = cVertPair['source'].positionScreen.z;
-                            }
+					var material = isFaceMaterial === true
+						? objectMaterials.materials[ face.materialIndex ]
+						: object.material;
+
+					if ( material === undefined ) continue;
+
+					var side = material.side;
+
+					if ( face instanceof THREE.Face3 ) {
+
+						v1 = _vertexPool[ face.a ];
+						v2 = _vertexPool[ face.b ];
+						v3 = _vertexPool[ face.c ];
+
+						_points3[ 0 ] = v1.positionScreen;
+						_points3[ 1 ] = v2.positionScreen;
+						_points3[ 2 ] = v3.positionScreen;
+
+						if ( v1.visible === true || v2.visible === true || v3.visible === true ||
+							_clipBox.isIntersectionBox( _boundingBox.setFromPoints( _points3 ) ) ) {
+
+							visible = ( ( v3.positionScreen.x - v1.positionScreen.x ) * ( v2.positionScreen.y - v1.positionScreen.y ) -
+								( v3.positionScreen.y - v1.positionScreen.y ) * ( v2.positionScreen.x - v1.positionScreen.x ) ) < 0;
+
+							if ( side === THREE.DoubleSide || visible === ( side === THREE.FrontSide ) ) {
+
+								_face = getNextFace3InPool();
+
+								_face.v1.copy( v1 );
+								_face.v2.copy( v2 );
+								_face.v3.copy( v3 );
+
+							} else {
+
+								continue;
+
+							}
 
 						} else {
+
 							continue;
+
 						}
-					} else {
-						continue;
+
+					} else if ( face instanceof THREE.Face4 ) {
+
+						v1 = _vertexPool[ face.a ];
+						v2 = _vertexPool[ face.b ];
+						v3 = _vertexPool[ face.c ];
+						v4 = _vertexPool[ face.d ];
+
+						_points4[ 0 ] = v1.positionScreen;
+						_points4[ 1 ] = v2.positionScreen;
+						_points4[ 2 ] = v3.positionScreen;
+						_points4[ 3 ] = v4.positionScreen;
+
+						if ( v1.visible === true || v2.visible === true || v3.visible === true || v4.visible === true ||
+							_clipBox.isIntersectionBox( _boundingBox.setFromPoints( _points4 ) ) ) {
+
+							visible = ( v4.positionScreen.x - v1.positionScreen.x ) * ( v2.positionScreen.y - v1.positionScreen.y ) -
+								( v4.positionScreen.y - v1.positionScreen.y ) * ( v2.positionScreen.x - v1.positionScreen.x ) < 0 ||
+								( v2.positionScreen.x - v3.positionScreen.x ) * ( v4.positionScreen.y - v3.positionScreen.y ) -
+								( v2.positionScreen.y - v3.positionScreen.y ) * ( v4.positionScreen.x - v3.positionScreen.x ) < 0;
+
+
+							if ( side === THREE.DoubleSide || visible === ( side === THREE.FrontSide ) ) {
+
+								_face = getNextFace4InPool();
+
+								_face.v1.copy( v1 );
+								_face.v2.copy( v2 );
+								_face.v3.copy( v3 );
+								_face.v4.copy( v4 );
+
+							} else {
+
+								continue;
+
+							}
+
+						} else {
+
+							continue;
+
+						}
+
 					}
+
+					_face.normalModel.copy( face.normal );
+
+					if ( visible === false && ( side === THREE.BackSide || side === THREE.DoubleSide ) ) {
+
+						_face.normalModel.negate();
+
+					}
+
+					_face.normalModel.applyMatrix3( _normalMatrix ).normalize();
+
+					_face.normalModelView.copy( _face.normalModel ).applyMatrix3( _normalViewMatrix );
+
+					_face.centroidModel.copy( face.centroid ).applyMatrix4( _modelMatrix );
+
+					faceVertexNormals = face.vertexNormals;
+
+					for ( n = 0, nl = faceVertexNormals.length; n < nl; n ++ ) {
+
+						var normalModel = _face.vertexNormalsModel[ n ];
+						normalModel.copy( faceVertexNormals[ n ] );
+
+						if ( visible === false && ( side === THREE.BackSide || side === THREE.DoubleSide ) ) {
+
+							normalModel.negate();
+
+						}
+
+						normalModel.applyMatrix3( _normalMatrix ).normalize();
+
+						var normalModelView = _face.vertexNormalsModelView[ n ];
+						normalModelView.copy( normalModel ).applyMatrix3( _normalViewMatrix );
+
+					}
+
+					_face.vertexNormalsLength = faceVertexNormals.length;
+
+					for ( c = 0, cl = faceVertexUvs.length; c < cl; c ++ ) {
+
+						uvs = faceVertexUvs[ c ][ f ];
+
+						if ( uvs === undefined ) continue;
+
+						for ( u = 0, ul = uvs.length; u < ul; u ++ ) {
+
+							_face.uvs[ c ][ u ] = uvs[ u ];
+
+						}
+
+					}
+
+					_face.color = face.color;
+					_face.material = material;
+
+					_centroid.copy( _face.centroidModel ).applyProjection( _viewProjectionMatrix );
+
+					_face.z = _centroid.z;
+
+					_renderData.elements.push( _face );
+
 				}
-				
-				_face.color = face.color;
-				_face.material = material;
-				_renderData.elements.push( _face );
+
+			} else if ( object instanceof THREE.Line ) {
+
+				_modelViewProjectionMatrix.multiplyMatrices( _viewProjectionMatrix, _modelMatrix );
+
+				vertices = object.geometry.vertices;
+
+				v1 = getNextVertexInPool();
+				v1.positionScreen.copy( vertices[ 0 ] ).applyMatrix4( _modelViewProjectionMatrix );
+
+				// Handle LineStrip and LinePieces
+				var step = object.type === THREE.LinePieces ? 2 : 1;
+
+				for ( v = 1, vl = vertices.length; v < vl; v ++ ) {
+
+					v1 = getNextVertexInPool();
+					v1.positionScreen.copy( vertices[ v ] ).applyMatrix4( _modelViewProjectionMatrix );
+
+					if ( ( v + 1 ) % step > 0 ) continue;
+
+					v2 = _vertexPool[ _vertexCount - 2 ];
+
+					_clippedVertex1PositionScreen.copy( v1.positionScreen );
+					_clippedVertex2PositionScreen.copy( v2.positionScreen );
+
+					if ( clipLine( _clippedVertex1PositionScreen, _clippedVertex2PositionScreen ) === true ) {
+
+						// Perform the perspective divide
+						_clippedVertex1PositionScreen.multiplyScalar( 1 / _clippedVertex1PositionScreen.w );
+						_clippedVertex2PositionScreen.multiplyScalar( 1 / _clippedVertex2PositionScreen.w );
+
+						_line = getNextLineInPool();
+						_line.v1.positionScreen.copy( _clippedVertex1PositionScreen );
+						_line.v2.positionScreen.copy( _clippedVertex2PositionScreen );
+
+						_line.z = Math.max( _clippedVertex1PositionScreen.z, _clippedVertex2PositionScreen.z );
+
+						_line.material = object.material;
+
+						if ( object.material.vertexColors === THREE.VertexColors ) {
+
+							_line.vertexColors[ 0 ].copy( object.geometry.colors[ v ] );
+							_line.vertexColors[ 1 ].copy( object.geometry.colors[ v - 1 ] );
+
+						}
+
+						_renderData.elements.push( _line );
+
+					}
+
+				}
+
 			}
+
 		}
+
+		for ( o = 0, ol = _renderData.sprites.length; o < ol; o++ ) {
+
+			object = _renderData.sprites[ o ].object;
+
+			_modelMatrix = object.matrixWorld;
+
+			if ( object instanceof THREE.Particle ) {
+
+				_vector4.set( _modelMatrix.elements[12], _modelMatrix.elements[13], _modelMatrix.elements[14], 1 );
+				_vector4.applyMatrix4( _viewProjectionMatrix );
+
+				_vector4.z /= _vector4.w;
+
+				if ( _vector4.z > 0 && _vector4.z < 1 ) {
+
+					_particle = getNextParticleInPool();
+					_particle.object = object;
+					_particle.x = _vector4.x / _vector4.w;
+					_particle.y = _vector4.y / _vector4.w;
+					_particle.z = _vector4.z;
+
+					_particle.rotation = object.rotation.z;
+
+					_particle.scale.x = object.scale.x * Math.abs( _particle.x - ( _vector4.x + camera.projectionMatrix.elements[0] ) / ( _vector4.w + camera.projectionMatrix.elements[12] ) );
+					_particle.scale.y = object.scale.y * Math.abs( _particle.y - ( _vector4.y + camera.projectionMatrix.elements[5] ) / ( _vector4.w + camera.projectionMatrix.elements[13] ) );
+
+					_particle.material = object.material;
+
+					_renderData.elements.push( _particle );
+
+				}
+
+			}
+
+		}
+
+		if ( sortElements === true ) _renderData.elements.sort( painterSort );
 
 		return _renderData;
 
@@ -9453,14 +9737,6 @@ THREE.Projector = function () {
 
 		return _vertexPool[ _vertexCount ++ ];
 
-	}
-	
-	function getNextCircleInPool( ) {
-        var circle = new hGraph.Graph.RenderableCircle( );
-		_circlePool.push( circle );
-		_circlePoolLength ++;
-		_circleCount ++;
-		return circle;
 	}
 
 	function getNextFace3InPool() {
@@ -9525,6 +9801,14 @@ THREE.Projector = function () {
 		}
 
 		return _particlePool[ _particleCount ++ ];
+
+	}
+
+	//
+
+	function painterSort( a, b ) {
+
+		return b.z - a.z;
 
 	}
 
@@ -11916,45 +12200,13 @@ THREE.CanvasRenderer = function ( parameters ) {
 
 				}
 
-			} else if ( element instanceof hGraph.Graph.RenderableCircle ) {
-                
-                x = element.center.positionScreen.x * _canvasWidthHalf;
-                y = element.center.positionScreen.y * _canvasHeightHalf;
-                r = element.radius;
-
-        
-                renderCircleFace( x, y, r, element, material );
-                    
-			}
-
+			} 
+			
 			_clearBox.union( _elemBox );
 
 		}
 
 		_context.setTransform( 1, 0, 0, 1, 0, 0 );
-
-
-        function renderCircleFace( x, y, r, element, mat ) {
-        
-            if( element.color )
-                _color.copy( element.color );
-            else
-                _color.copy( mat.color );
-                
-            setOpacity( material.opacity );
-			setBlending( material.blending );
-
-            if ( material.vertexColors === THREE.FaceColors )
-                _color.multiply( element.color );
-                
-            drawCircle( x, y, r );
-            
-            if( material.wireframe === true )
-                strokePath( _color, mat.wireframeLinewidth, mat.wireframeLinecap, mat.wireframeLinejoin )
-            else
-                fillPath( _color );
-            
-        }
 
 		function renderLine( v1, v2, element, material ) {
 
@@ -12922,7 +13174,7 @@ THREE.RingGeometry = function ( innerRadius, outerRadius, thetaSegments, phiSegm
 	thetaLength = thetaLength !== undefined ? thetaLength : Math.PI * 2;
 
 	thetaSegments = thetaSegments !== undefined ? Math.max( 3, thetaSegments ) : 8;
-	phiSegments = phiSegments !== undefined ? Math.max( 3, phiSegments ) : 8;
+	phiSegments = phiSegments !== undefined ? Math.max( 1, phiSegments ) : 8;
 
 	var i, o, uvs = [], radius = innerRadius, radiusStep = ( ( outerRadius - innerRadius ) / phiSegments );
 
@@ -12980,24 +13232,6 @@ THREE.RingGeometry = function ( innerRadius, outerRadius, thetaSegments, phiSegm
 
 THREE.RingGeometry.prototype = Object.create( THREE.Geometry.prototype );
 
-var CONFIG = { };
-CONFIG['HGRAPH_VERSION'] = '0.01';
-var DEFAULTS = { };
-DEFAULTS['HGRAPH_WIDTH'] = 960;
-DEFAULTS['HGRAPH_HEIGHT'] = 720;
-DEFAULTS['HGRAPH_RANGE_MINIMUM'] = 60;
-DEFAULTS['HGRAPH_RANGE_MAXIMUM'] = 240;
-DEFAULTS['HGRAPH_POINT_RADIUS'] = 10;
-DEFAULTS['HGRAPH_SUBPOINT_RADIUS'] = 8;
-
-DEFAULTS['HGRAPH_CANVAS_TEXTALIGN'] = 'center';
-DEFAULTS['HGRAPH_CANVAS_TEXT'] = '10px Arial';
-DEFAULTS['HGRAPH_POINT_COLOR_HEALTHY'] = '#616363';
-DEFAULTS['HGRAPH_POINT_COLOR_UNHEALTHY'] = '#e1604f';
-DEFAULTS['HGRAPH_APP_BOOTSTRAPS'] = ['[data-hgraph-app]','[hgraph-app]'];
-DEFAULTS['HGRAPH_GRAPH_BOOTSTRAPS'] = ['[data-hgraph-graph]','[hgraph-graph]'];
-DEFAULTS['HGRAPH_PAYLOAD_TRIGGERS'] = ['[data-hgraph-payload]','[hgraph-payload]'];
-DEFAULTS['HGRAPH_RING_FILL_COLOR'] = '#97be8c';
 // math functions
 var ceil = Math.ceil;
 var floor = Math.floor;
@@ -13192,13 +13426,25 @@ var // a hash of private object scopes
     // update callbacks
     updaters = { },
     // update timeout id
-    updateTimeoutID = null;
+    updateTimeoutID = null,
+    // last frame time
+    lastFrameTime = + new Date( ),
+    // other stuff
+    PI = Math.PI,
+    PI2 = PI * 2;
     
 function UpdateAll( ) {
+    var curTime = + new Date( ),
+        difTime = curTime - lastFrameTime;
+    
+    if( difTime <= 0 )
+        difTime = HGRAPH_MINIMUM_FRAMETIME;
     
     forEach( updaters, function( fn ) {
-        if( isFn( fn ) ) { fn( ); }
+        if( isFn( fn ) ) { fn( difTime ); }
     });
+    
+    lastFrameTime = curTime;
     
     if( UpdateAll.looping )
         updateTimeoutID = requestAnimationFrame( UpdateAll );
@@ -13210,6 +13456,7 @@ UpdateAll.looping = false;
 
 UpdateAll.Begin = function( ) {
     UpdateAll.looping = true;
+    lastFrameTime = + new Date( );
     return UpdateAll( );
 };
 
@@ -13225,7 +13472,7 @@ UpdateAll.Stop = function( ) {
 // @returns {object} a parsed data object that has passed through hGraph.Data.parse
 function GetPayloadData( container ) {
     var payload = [ ],
-        selectionQuery = DEFAULTS['HGRAPH_PAYLOAD_TRIGGERS'].join(',');
+        selectionQuery = HGRAPH_PAYLOAD_TRIGGERS.join(',');
         
     function PushPayloadData( ) {
         if( this.value )
@@ -13249,19 +13496,26 @@ function Render( ) {
     renderer.render( scene, camera );
 };
 
-function Update( ) {
+function Update( dt ) {
     var locals = localsHash[this.uid],
         camera = locals['camera'],
         mouse = locals['mouse'],
-        components = locals['components'];
+        animations = locals['animations'],
+        components = locals['components'],
+        anName;
     
-    if( mouse.isDown ) {
+    if( mouse.isDown )
         mouse.downCount += 0.15;
-        camera.rotation.z -= 4.0;
+    
+    for( anName in animations ) {
+        if( animations[anName] ) { 
+            animations[anName].Update( dt ); 
+            if( animations[anName].done ) { animations[anName] = null; }
+        }
     }
     
     for( var i = 0; i < components.length; i++ )
-        components[i].Update( mouse );
+        components[i].Update( dt );
         
     protoHash[this.uid].Render( );
 };
@@ -13357,8 +13611,29 @@ function Graph( config ) {
     };
     
     local['scene'] = new THREE.Scene( );
+    
     local['components'] = [ ];
-    local['mouse'] = { isDown : false, downCount : 0 };
+    local['components'].GetComponent = function( Class ) {
+        if( !isFn( Class ) ) { return false; }
+        
+        for( var i = 0; i < this.length; i++ )
+            if( this[i] instanceof Class ) { return this[i]; }
+            
+        return false;
+    };
+    
+    
+    local['mouse'] = { 
+        isDown : false, 
+        wasDragged : false,
+        downCount : 0,
+        startTime : 0,
+        currentScreenPosition : new THREE.Vector2( ),
+        currentWorldPosition : new THREE.Vector2( ),
+        lastScreenPosition : new THREE.Vector2( ),
+        startScreenPosition : new THREE.Vector2( )
+    };
+    local['animations'] = { rotation : null };
      
     // save all the local information in the private local hash
     localsHash[ this.uid ] = local;
@@ -13368,29 +13643,133 @@ function Graph( config ) {
         Render : inject( Render, [ ], this ),
         Resize : inject( Resize, [ ], this )
     };
+        
+    function BroadcastClick( loc ) {
+        var mouse = loc['mouse'],
+            components = loc['components'],
+            camera = loc['camera'],
+            animations = loc['animations'],
+            pointMan = components.GetComponent( hGraph.Graph.PointManager ),
+            targeted = pointMan && pointMan.CheckClick( camera, mouse.currentScreenPosition );
+        
+        if( targeted !== false ) {
+            var _startRotation = camera.rotation.z,
+                _endingRotation = toRad( targeted.GetPointTheta( ) ),
+                _rotationDiff = ( _endingRotation % PI2 ) - ( _startRotation % PI2 ),
+                _rotationInc = abs( _rotationDiff / 10 ),
+                _rotationStep = _rotationDiff < 0 ? -_rotationInc : _rotationInc,
+                _anCount = 0;
+            
+            
+            animations['rotation'] = new hGraph.Graph.Animation(function( ) {
+                camera.rotation.z += _rotationStep;
+                _rotationDiff = abs( _endingRotation - camera.rotation.z ) * 180 / PI;
+                return _rotationDiff < 1;
+            });
+            
+        } else
+            console.log( 'no point clicked' );
+        
+    };
+    
+    function BroadcastGesture( loc ) {
+        
+    };
     
     function MouseDown( loc ) {
+        var _self = this;
         return (function( ) {
-            var m = loc['mouse'];
+            var m = loc['mouse'],
+                e = d3.event['touches'] ? d3.event['touches'][0] : d3.event,
+                // event page coordinates
+                px = e.pageX,
+                py = e.pageY,
+                // screen coordinates
+                sx = px - loc['container'].offsetLeft,
+                sy = py - loc['container'].offsetTop;
+            
+            // save the screen coordinates    
+            m.startScreenPosition.x = sx;
+            m.startScreenPosition.y = sy;
+            // initialize the other state variables
             m.isDown = true;
             m.downCount = 0;
+            m.startTime = + new Date( );
         });
     };
     
     function MouseUp( loc ) {
+        var  _self = this;
         return (function( ) {
-            var m = loc['mouse'];
+            var m = loc['mouse'],
+                ct = + new Date( ), // current time
+                // calculate differences
+                dt = ct- m.startTime,
+                dx = m.lastScreenPosition.x - m.startScreenPosition.x,
+                dy = m.lastScreenPosition.y - m.startScreenPosition.y;
+                
             m.isDown = false;
             m.downCount = 0;
+            m.startTime = 0;
+            
+            if( !m.wasDragged )
+                BroadcastClick.call( _self, loc );
+            else if( ( dx > HGRAPH_GESTURE_THRESHOLD || dy > HGRAPH_GESTURE_THRESHOLD ) && dt < 400 )
+                BroadcastGesture.call( _self, loc );
+            
+            
+            // save the screen coordinates    
+            m.startScreenPosition.x = 0;
+            m.startScreenPosition.y = 0;
+            
+            setTimeout(function ( ){
+                m.wasDragged = false;
+            }, 100 );
+        });
+    };
+    
+    function MouseMove( loc ) {
+        var  _self = this;
+        return (function( ) { 
+            var m = loc['mouse'],
+                e = d3.event['touches'] ? d3.event['touches'][0] : d3.event,
+                // page coordinates:
+                px = e.pageX,
+                py = e.pageY,
+                // screen coordinates:
+                sx = px - local['container'].offsetLeft,
+                sy = py - local['container'].offsetTop,
+                // relative coordinates: 
+                rx = ( local['container'].offsetWidth / 2 ) - sx,
+                ry = ( local['container'].offsetHeight / 2 ) - sy,
+                // difference amount
+                dx = m.lastScreenPosition.x - sx,
+                dy = m.lastScreenPosition.y - sy;
+                
+            m.currentScreenPosition.x = sx;
+            m.currentScreenPosition.y = sy;
+            
+            m.currentWorldPosition.x = -rx;
+            m.currentWorldPosition.y = ry;
+            
+            if( ( abs( dx ) > 0 || abs( dy ) > 0 ) && m.isDown )
+                if( !m.wasDragged ) { m.wasDragged = true; }
+            
+            // update the last position reference
+            m.lastScreenPosition.x = m.currentScreenPosition.x;
+            m.lastScreenPosition.y = m.currentScreenPosition.y;
+            
+            return e.preventDefault && e.preventDefault( );
         });
     };
     
     
     d3.select( local['container'] ) 
-        .on( 'mousedown', MouseDown( local ) )
-        .on( 'mouseup', MouseUp( local ) )
-        .on( 'touchstart', MouseDown( local ) )
-        .on( 'touchend', MouseUp( local ) );
+        .on( 'mousedown', MouseDown.call( this, local ) )
+        .on( 'mouseup', MouseUp.call( this, local ) )
+        .on( 'mousemove', MouseMove.call( this, local ) )
+        .on( 'touchstart', MouseDown.call( this, local ) )
+        .on( 'touchmove', MouseMove.call( this, local ) );
     
      // add an injected Resize function to the global-private list
     __ResizeCallbacks.push( protoHash[ this.uid ].Resize );
@@ -13419,69 +13798,42 @@ return Graph;
 window.ShutDown = UpdateAll.Stop;
 
 })( );
-hGraph.Graph.CircleFace = (function( ) {
-    
-function CircleFace( radius, color ) {
-    this.radius = radius || 10;
-    this.color = color || false;
+hGraph.Graph.Animation = (function( ) {
+
+var // local hash just like in graph
+    localsHash = { };
+
+function Step( ) {
+      
 };
 
-CircleFace.prototype = { };
-
-return CircleFace;
+function Animation( fn ) {
     
-})( );
-hGraph.Graph.RenderableCircle = (function( ) {
-
-function RenderableCircle( ) {
-    this.radius = 10;
-    this.center = new THREE.RenderableVertex( );
-    this.color = null;
+    this.uid = createUID( );
+    this.done = isFn( fn ) ? false : true;
+    
+    var local = { callback : fn };
+    
+    localsHash[this.uid] = local;
 };
 
-RenderableCircle.prototype = { };
-
-return RenderableCircle;
-
-})( );
-hGraph.Graph.RingGeometry = (function( ) {
-
-function RingGeometry( position, innerRadius, outerRadius, color, backColor ) {
-
-    var pos = position || new THREE.Vector3( 0, 0, 0 ),
-        face1 = new hGraph.Graph.CircleFace( outerRadius, color || new THREE.Color( 0xff00ff ) ),
-        face2 =  new hGraph.Graph.CircleFace( innerRadius, backColor || new THREE.Color( 0xffffff ) );
+Animation.prototype = { 
     
-    this.vertices = [ pos ];
-    this.faces = [ face1, face2 ];
+    Update : function( dt ) {
+        
+        var locals = localsHash[this.uid],
+            callback = locals['callback'];
+        
+        if( callback( dt ) )
+            this.done = true;
+        else 
+            this.done = false;
     
-	this.boundingSphere = new THREE.Sphere( new THREE.Vector3(), this.radius );	
+    }
+    
 };
 
-RingGeometry.prototype = Object.create( THREE.Geometry.prototype );
-
-RingGeometry.prototype.SetRadius = function( inner, outer ) { }
-
-return RingGeometry;
-
-})( );
-hGraph.Graph.CircleGeometry = (function( ) {
-
-function CircleGeometry( radius, position ) {
-    THREE.Geometry.call( this );
-    
-    var pos = position || new THREE.Vector3( 0, 0, 0 ),
-        face = new hGraph.Graph.CircleFace( radius );
-    
-    this.vertices = [ pos ];
-    this.faces = [ face ];
-    
-	this.boundingSphere = new THREE.Sphere( new THREE.Vector3(), this.radius );
-};
-
-CircleGeometry.prototype = Object.create( THREE.Geometry.prototype );
-
-return CircleGeometry;
+return Animation;
 
 })( );
 function ComponentFactory( factory ) {
@@ -13541,8 +13893,8 @@ Ring['constructor'] = function( ) {
     this.uid = createUID( );
     var local = { };
         
-    local['geometry'] = new hGraph.Graph.RingGeometry( null, 150, 200, new THREE.Color( 0x97be8c ) );
-    local['material'] = new THREE.MeshBasicMaterial({ color : 0x97be8c, wireframe : false });
+    local['geometry'] = new THREE.RingGeometry( __ScoreScale( 50 ), __ScoreScale( 80 ), 45, 1 );
+    local['material'] = new THREE.MeshBasicMaterial({ color : HGRAPH_RING_FILL_COLOR, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
 
     // save the local variables into the hash
@@ -13604,6 +13956,16 @@ function PointManager( proto ) {
             
         return points.length;
     };
+    
+    proto.CheckClick = function( camera, screenCoordinates ) {
+        var local = localsHash[ this.uid ],
+            points = local['points'];
+            
+        for( var i = 0; i < points.length; i++ )
+            if( points[i].CheckCollide( camera, screenCoordinates ) ) { return points[i]; };
+        
+        return false;
+    };
 
 };
 
@@ -13655,7 +14017,7 @@ function Point( proto ) {
             object = local['object'],
             position = local['position'],
             subManager = local['subManager'];
-        
+                
         object.position.x = position.x;
         object.position.y = position.y;
         
@@ -13674,22 +14036,63 @@ function Point( proto ) {
             degreeInfo = manager.GetDegreeRange( ),
             startTheta = degreeInfo.x,
             thetaInc = degreeInfo.z;
-            
+                        
         var subStart = startTheta + (thetaInc * index),
             subEnd = subStart + thetaInc;
             
         subManager.SetDegreeRange( subStart, subEnd );
         
-        var xpos = Math.cos( toRad( startTheta + (thetaInc * index) ) ) * 150,
-            ypos = Math.sin( toRad( startTheta + (thetaInc * index) ) ) * 150;
+        var xpos = Math.cos( toRad( startTheta + (thetaInc * index) ) ) * __ScoreScale( this.score ),
+            ypos = Math.sin( toRad( startTheta + (thetaInc * index) ) ) * __ScoreScale( this.score );
             
         position.x = object.position.x = xpos;
         position.y = object.position.y = ypos;
-    
+        
         // add this object into the scene
         scene.add( local['object'] );  
         // make sure all sub points get initialized as well
         subManager.Initialize( scene );
+    };
+    
+    proto.CheckCollide = function( camera, screenCoordinates ) {
+        var local = localsHash[this.uid],
+            object = local['object'],
+            position = object.position,
+            subManager = local['subManager'],
+            projector = new THREE.Projector( ),
+            projVector = new THREE.Vector3( ),
+            dx, dy, d2, dr;
+        
+        projVector.getPositionFromMatrix( object.matrixWorld );
+        
+        projector.projectVector( projVector, camera );
+        
+        projVector.x = ( projVector.x * ( window.innerWidth * 0.5 ) ) + ( window.innerWidth * 0.5 );
+        projVector.y = - ( projVector.y * ( window.innerHeight * 0.5 ) ) + ( window.innerHeight * 0.5 );
+            
+        // distances
+        dx = projVector.x - screenCoordinates.x;
+        dy = projVector.y - screenCoordinates.y;
+        // squared distances
+        d2 = ( dx * dx ) + ( dy * dy );
+        dr = ( HGRAPH_POINT_RADIUS * HGRAPH_POINT_RADIUS );
+        
+        if( d2 < dr )
+            return this;
+        else 
+            return subManager.CheckClick( camera, screenCoordinates );
+            
+    };
+    
+    proto.GetPointTheta = function( ) {
+        var local = localsHash[this.uid],
+            manager = local['manager'],
+            index = local['index'],
+            // get parent degree info
+            degreeInfo = manager.GetDegreeRange( ),
+            startTheta = degreeInfo.x,
+            thetaInc = degreeInfo.z;
+        return startTheta + (thetaInc * index);
     };
 
 };
@@ -13697,26 +14100,27 @@ function Point( proto ) {
 Point['constructor'] = function( parameters, manager, index ) {
     
     this.uid = createUID( );
-    
-    var local = { },
-        subManager
-        color = manager.subFlag ? 0x555555 : 0x454545,
-        opacity = manager.subFlag ? 0.0 : 1.0;
-        
-    local['index'] = index;
-    // geometric properties
-    local['geometry'] = new hGraph.Graph.CircleGeometry( 10 );
-    local['material'] = new THREE.MeshBasicMaterial({ color : color, opacity : opacity, wireframe : false });
-    local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
-    local['position'] = new THREE.Vector2( 0, 0 );
-    local['manager'] = manager;
-    
-    
     // point data properties
     this.name = parameters.name;
     this.value = parameters.value;
     this.score = parameters.score;
     this.healthyRange = parameters.healthyRange;
+    
+    var local = { },
+        subManager
+        color = ( this.score > 50 && this.score < 80 ) 
+                        ? HGRAPH_POINT_COLOR_HEALTHY 
+                        : HGRAPH_POINT_COLOR_UNHEALTHY,
+                        
+        opacity = manager.subFlag ? 0.0 : 1.0;
+        
+    local['index'] = index;
+    // geometric properties
+    local['geometry'] = new THREE.CircleGeometry( HGRAPH_POINT_RADIUS, 10 );
+    local['material'] = new THREE.MeshBasicMaterial({ color : color, opacity : opacity, wireframe : false });
+    local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
+    local['position'] = new THREE.Vector2( 0, 0 );
+    local['manager'] = manager;
     
     local['object'].name = 'whoa';
    
@@ -13734,6 +14138,10 @@ Point['constructor'] = function( parameters, manager, index ) {
 return ComponentFactory( Point );
 
 })( );
+
+__ScoreScale = d3.scale.linear( )
+                    .domain([ 0, 100 ])
+                    .range([ HGRAPH_RANGE_MINIMUM, HGRAPH_RANGE_MAXIMUM ]);
 
 // hWindowResize
 // loops through the resize callbacks firing them with the new width and
@@ -13759,7 +14167,7 @@ function hCreateGraph( container ){
 // function call. takes care of populating the graphs on the page
 function hGraphInit( ) {
     
-    d3.select( DEFAULTS['HGRAPH_GRAPH_BOOTSTRAPS'].join(',') ).each(function( ){
+    d3.select( HGRAPH_GRAPH_BOOTSTRAPS.join(',') ).each(function( ){
         hCreateGraph( this );
     });
     
@@ -13773,7 +14181,7 @@ function hGraphInit( ) {
 function hGraphBootStrap( ) {
     // an array of matches
     var matches = [ ];
-    d3.select( DEFAULTS['HGRAPH_APP_BOOTSTRAPS'].join(',') ).each(function( ){
+    d3.select( HGRAPH_APP_BOOTSTRAPS.join(',') ).each(function( ){
         matches.push( this );
     });
     
@@ -13788,7 +14196,12 @@ function hGraphBootStrap( ) {
         return hGraphInit( );
 };
 
-d3.select( document ).on( 'DOMContentLoaded', hGraphBootStrap );
+d3.select( document )
+    .on( 'DOMContentLoaded', hGraphBootStrap )
+    .on( 'touchmove', function( ) {
+        var e = d3.event;
+        return e.preventDefault && e.preventDefault( ); 
+    });
 d3.select( window ).on( 'resize', hWindowResize );
 
 // expose hGraph to the window

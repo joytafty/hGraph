@@ -29,14 +29,19 @@ var // hGraph namespace definition
     // script-wide accessable private variables
     __RootElement = false,
     __GraphInstances = { },
-    __ResizeCallbacks = [ ];
+    __ResizeCallbacks = [ ],
+    __ScoreScale;
 
-import "vendor/"
 import "config/"
+import "vendor/"
 import "helpers/"
 import "error/"
 import "data/"
 import "graph/"
+
+__ScoreScale = d3.scale.linear( )
+                    .domain([ 0, 100 ])
+                    .range([ HGRAPH_RANGE_MINIMUM, HGRAPH_RANGE_MAXIMUM ]);
 
 // hWindowResize
 // loops through the resize callbacks firing them with the new width and
@@ -62,7 +67,7 @@ function hCreateGraph( container ){
 // function call. takes care of populating the graphs on the page
 function hGraphInit( ) {
     
-    d3.select( DEFAULTS['HGRAPH_GRAPH_BOOTSTRAPS'].join(',') ).each(function( ){
+    d3.select( HGRAPH_GRAPH_BOOTSTRAPS.join(',') ).each(function( ){
         hCreateGraph( this );
     });
     
@@ -76,7 +81,7 @@ function hGraphInit( ) {
 function hGraphBootStrap( ) {
     // an array of matches
     var matches = [ ];
-    d3.select( DEFAULTS['HGRAPH_APP_BOOTSTRAPS'].join(',') ).each(function( ){
+    d3.select( HGRAPH_APP_BOOTSTRAPS.join(',') ).each(function( ){
         matches.push( this );
     });
     
@@ -91,7 +96,12 @@ function hGraphBootStrap( ) {
         return hGraphInit( );
 };
 
-d3.select( document ).on( 'DOMContentLoaded', hGraphBootStrap );
+d3.select( document )
+    .on( 'DOMContentLoaded', hGraphBootStrap )
+    .on( 'touchmove', function( ) {
+        var e = d3.event;
+        return e.preventDefault && e.preventDefault( ); 
+    });
 d3.select( window ).on( 'resize', hWindowResize );
 
 // expose hGraph to the window

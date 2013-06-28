@@ -50,6 +50,16 @@ function PointManager( proto ) {
             
         return points.length;
     };
+    
+    proto.CheckClick = function( camera, screenCoordinates ) {
+        var local = localsHash[ this.uid ],
+            points = local['points'];
+            
+        for( var i = 0; i < points.length; i++ )
+            if( points[i].CheckCollide( camera, screenCoordinates ) ) { return points[i]; };
+        
+        return false;
+    };
 
 };
 

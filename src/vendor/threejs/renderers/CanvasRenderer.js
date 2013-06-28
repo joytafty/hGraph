@@ -326,45 +326,13 @@ THREE.CanvasRenderer = function ( parameters ) {
 
 				}
 
-			} else if ( element instanceof hGraph.Graph.RenderableCircle ) {
-                
-                x = element.center.positionScreen.x * _canvasWidthHalf;
-                y = element.center.positionScreen.y * _canvasHeightHalf;
-                r = element.radius;
-
-        
-                renderCircleFace( x, y, r, element, material );
-                    
-			}
-
+			} 
+			
 			_clearBox.union( _elemBox );
 
 		}
 
 		_context.setTransform( 1, 0, 0, 1, 0, 0 );
-
-
-        function renderCircleFace( x, y, r, element, mat ) {
-        
-            if( element.color )
-                _color.copy( element.color );
-            else
-                _color.copy( mat.color );
-                
-            setOpacity( material.opacity );
-			setBlending( material.blending );
-
-            if ( material.vertexColors === THREE.FaceColors )
-                _color.multiply( element.color );
-                
-            drawCircle( x, y, r );
-            
-            if( material.wireframe === true )
-                strokePath( _color, mat.wireframeLinewidth, mat.wireframeLinecap, mat.wireframeLinejoin )
-            else
-                fillPath( _color );
-            
-        }
 
 		function renderLine( v1, v2, element, material ) {
 

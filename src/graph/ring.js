@@ -26,8 +26,8 @@ Ring['constructor'] = function( ) {
     this.uid = createUID( );
     var local = { };
         
-    local['geometry'] = new hGraph.Graph.RingGeometry( null, 150, 200, new THREE.Color( 0x97be8c ) );
-    local['material'] = new THREE.MeshBasicMaterial({ color : 0x97be8c, wireframe : false });
+    local['geometry'] = new THREE.RingGeometry( __ScoreScale( 50 ), __ScoreScale( 80 ), 45, 1 );
+    local['material'] = new THREE.MeshBasicMaterial({ color : HGRAPH_RING_FILL_COLOR, wireframe : false });
     local['object'] = new THREE.Mesh( local['geometry'], local['material'] );
 
     // save the local variables into the hash
